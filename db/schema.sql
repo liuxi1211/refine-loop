@@ -1280,6 +1280,8 @@ CREATE TABLE IF NOT EXISTS llm_usage (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   run_id VARCHAR(40) NULL,
   unit_id VARCHAR(40) NULL,
+  -- 模型档位 fast / strong（T7 用量记账维度）
+  model_profile VARCHAR(16) NULL,
   model VARCHAR(64) NOT NULL,
   prompt_tokens INT NOT NULL DEFAULT 0,
   completion_tokens INT NOT NULL DEFAULT 0,

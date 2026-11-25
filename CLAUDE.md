@@ -11,8 +11,8 @@
 
 - 后端：Java 21 · Spring Boot 3.5 · MyBatis-Plus · SQLite 单文件库（`db/schema.sql` 是表结构唯一事实源，启动期自动建表）
 - 前端：Vue 3 + Vite + TS（`frontend/`，数据中心运维台）
-- 分层：`web → 领域(ops/tushare/user) → data → common`；`config` 是装配根
-- 阶段：Phase A 地基（Tushare 接入 + 运维台 + 账号域）已完成；`capability/pipeline/judgment/report/version` 尚未落代码
+- 分层：`web → 领域(ops/tushare/user) → data → common`；`capability` 依赖 `data/common/config`；`config` 是装配根
+- 阶段：Phase A 地基（Tushare 接入 + 运维台 + 账号域）已完成；T6 能力单元框架、T7 LLM 双协议基座已落地；`pipeline/judgment/report/version` 尚未落代码
 
 ## 2. 十条红线（违反即返工）
 
@@ -39,10 +39,11 @@ com.arthur.refineloop
 ├── tushare/    client|ratelimit|quality + ingest/{model,dto,registry,service}
 ├── user/       账号域（model 角色/权限 + service 账号/认证/偏好/自选股 + UserViews）
 ├── web/        GlobalExceptionHandler|HealthController + common/ + ops/ + user/ + auth/（Controller + *Requests）
-└── (规划) capability/ pipeline/ judgment/ report/ version（无代码不建空目录/不塞 .gitkeep）
+├── capability/ 能力单元框架：spi/（契约+FactBundle）| runtime/（UnitRegistry/FactStore/UnitVersionStore）| runtime/llm/（LlmInvoker/双协议 ChatClient/ReportGenerator）| units/（T9 起）
+└── (规划) pipeline/ judgment/ report/ version（无代码不建空目录/不塞 .gitkeep）
 ```
 
-依赖方向：`web → 领域(ops/tushare/user) → data → common`；`common` 不依赖任何人；`web` 不依赖 `data`；`user` 不依赖 `ops`/`tushare`。
+依赖方向：`web → 领域(ops/tushare/user) → data → common`；`capability` 只依赖 `common/config(属性)/data`，禁止依赖 `web/ops/tushare/user/pipeline/judgment/report/version`；`units → runtime → spi` 单向，单元之间禁止互调；`common` 不依赖任何人；`web` 不依赖 `data`；`user` 不依赖 `ops`/`tushare`。
 测试包与主代码同构；夹具放 `support/`；集成测试放 `it/`。
 
 ## 4. 命名（新增类必须先在后缀表里找到位置）

@@ -49,6 +49,17 @@ public final class TraceContext {
         return traceId == null || traceId.isBlank() ? "-" : traceId;
     }
 
+    /** 当前 runId；不在批处理/流水线上下文时返回 null。 */
+    public static String currentRunId() {
+        return MDC.get(RUN_ID);
+    }
+
+    /** 当前 runId；缺失时返回占位符。 */
+    public static String currentRunIdOrNone() {
+        String runId = MDC.get(RUN_ID);
+        return runId == null || runId.isBlank() ? "-" : runId;
+    }
+
     /** 生成新的 traceId（16 位十六进制，足够单机排障使用）。 */
     public static String newTraceId() {
         long value = ThreadLocalRandom.current().nextLong();

@@ -17,8 +17,17 @@ tushare:
   token: ${TUSHARE_TOKEN:}
 
 llm:
-  dashscope:
-    api-key: ${DASHSCOPE_API_KEY:}
+  providers:
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+    ark:
+      api-key: ${ARK_API_KEY:}
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:}
+    local-anthropic:
+      api-key: ${LOCAL_ANTHROPIC_API_KEY:}
+    claude:
+      api-key: ${ANTHROPIC_API_KEY:}
 
 logging:
   file:

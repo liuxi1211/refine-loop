@@ -1,5 +1,6 @@
 package com.arthur.refineloop.architecture;
 
+import com.arthur.refineloop.capability.spi.annotation.CapabilityUnit;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaField;
 import com.tngtech.archunit.core.domain.JavaMethod;
@@ -50,7 +51,8 @@ class ArchitectureRulesTest {
             .that().resideInAPackage("com.arthur.refineloop.common..")
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.arthur.refineloop.ops..", "com.arthur.refineloop.tushare..", "com.arthur.refineloop.user..",
-                    "com.arthur.refineloop.data..", "com.arthur.refineloop.web..", "com.arthur.refineloop.config..")
+                    "com.arthur.refineloop.data..", "com.arthur.refineloop.web..", "com.arthur.refineloop.config..",
+                    "com.arthur.refineloop.capability..")
             .because("common 是地基：不得依赖任何业务域或装配层（规范 01 §4）");
 
     @ArchTest
@@ -58,8 +60,62 @@ class ArchitectureRulesTest {
             .that().resideInAPackage("com.arthur.refineloop.data..")
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.arthur.refineloop.ops..", "com.arthur.refineloop.tushare..",
-                    "com.arthur.refineloop.user..", "com.arthur.refineloop.web..")
+                    "com.arthur.refineloop.user..", "com.arthur.refineloop.web..",
+                    "com.arthur.refineloop.capability..")
             .because("data 是最底层数据访问，不得反向依赖领域与 web（规范 01 §4）");
+
+    @ArchTest
+    static final ArchRule capability不得依赖上层领域 = noClasses()
+            .that().resideInAPackage("com.arthur.refineloop.capability..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.arthur.refineloop.ops..", "com.arthur.refineloop.tushare..",
+                    "com.arthur.refineloop.user..", "com.arthur.refineloop.web..",
+                    "com.arthur.refineloop.pipeline..", "com.arthur.refineloop.judgment..",
+                    "com.arthur.refineloop.report..", "com.arthur.refineloop.version..")
+            .because("capability 是核心域，只允许依赖 common/config/data/spi（规范 01 §4）");
+
+    @ArchTest
+    static final ArchRule capability_spi不得依赖运行时与数据层 = noClasses()
+            .that().resideInAPackage("com.arthur.refineloop.capability.spi..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.arthur.refineloop.capability.runtime..",
+                    "com.arthur.refineloop.capability.units..",
+                    "com.arthur.refineloop.data..")
+            .because("SPI 是契约层，依赖方向只能是 units → runtime → spi（规范 01 §4）");
+
+    @ArchTest
+    static final ArchRule capability_runtime不得依赖units = noClasses()
+            .that().resideInAPackage("com.arthur.refineloop.capability.runtime..")
+            .should().dependOnClassesThat().resideInAPackage("com.arthur.refineloop.capability.units..")
+            .because("运行时不得反向依赖具体单元；单元由注册器按注解装配");
+
+    @ArchTest
+    static final ArchRule capability_units之间禁止互调 = classes()
+            .that().resideInAPackage("com.arthur.refineloop.capability.units..")
+            .should(new ArchCondition<>("单元不得依赖另一个带 @CapabilityUnit 的单元") {
+                @Override
+                public void check(JavaClass item, ConditionEvents events) {
+                    item.getDirectDependenciesFromSelf().forEach(dependency -> {
+                        JavaClass target = dependency.getTargetClass();
+                        if (!target.equals(item)
+                                && target.getPackageName().startsWith("com.arthur.refineloop.capability.units.")
+                                && target.isAnnotatedWith(CapabilityUnit.class)) {
+                            events.add(SimpleConditionEvent.violated(dependency,
+                                    item.getFullName() + " 依赖了另一个能力单元 "
+                                            + target.getFullName() + "（单元之间禁止互调）"));
+                        }
+                    });
+                }
+            })
+            .allowEmptyShould(true)
+            .because("单元协作只通过 FactBundle；互调会造成隐式编排与版本耦合");
+
+    @ArchTest
+    static final ArchRule 只有llm包可直接使用ChatClient = noClasses()
+            .that().resideOutsideOfPackage("com.arthur.refineloop.capability.runtime.llm..")
+            .should().dependOnClassesThat()
+            .haveFullyQualifiedName("org.springframework.ai.chat.client.ChatClient")
+            .because("ChatClient 直连点必须收敛在 LlmInvoker/Provider 所在包（T7）");
 
     @ArchTest
     static final ArchRule 领域包不得依赖web = noClasses()

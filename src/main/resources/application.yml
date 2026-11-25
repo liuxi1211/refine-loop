@@ -12,6 +12,7 @@ spring:
     import:
       - optional:classpath:ratelimit.yml
       - optional:classpath:quality.yml
+      - optional:classpath:llm.yml
   # 优雅停机：先停止接收新请求，等在途请求（含正在落库的批次）完成再退出，避免 SQLite 写入被硬切
   lifecycle:
     timeout-per-shutdown-phase: 30s
