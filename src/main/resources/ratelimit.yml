@@ -1,0 +1,62 @@
+# ============================================================
+# Tushare 限流配置（T3）：次/分钟，按接口独立计数（自然分钟窗口 + Guava 平滑）
+# 取值 =《Tushare接口对接手册》附录 B 留 10~25% 余量；特殊项：
+#   report_rc 1 次/分钟（试用档每天 10 次，翻页即 40203）
+#   fina_indicator 项目原未配置，补 150
+# 全部可调，改完重启生效；不得配置为 0 或负数。
+# ============================================================
+tushare:
+  ratelimit:
+    default-limit: 60
+    smoothing-enabled: true
+    counter-enabled: true
+    limits:
+      # 500/分钟 → 400
+      daily: 400
+      stock_basic: 400
+      trade_cal: 400
+      index_basic: 400
+      index_daily: 400
+      # 300/分钟 → 240
+      disclosure_date: 240
+      # 200/分钟 → 160
+      adj_factor: 160
+      index_weight: 160
+      index_classify: 160
+      index_member_all: 160
+      namechange: 160
+      suspend_d: 160
+      income: 160
+      balancesheet: 160
+      cashflow: 160
+      forecast: 160
+      stk_weekly_monthly: 160
+      # 190/分钟 → 152
+      express: 152
+      # 180/分钟 → 150
+      daily_basic: 150
+      moneyflow: 150
+      stk_limit: 150
+      dividend: 150
+      top_list: 150
+      top_inst: 150
+      block_trade: 150
+      hk_hold: 150
+      margin: 150
+      margin_detail: 150
+      stk_holdertrade: 150
+      stk_holdernumber: 150
+      # 150/分钟 → 120（fina_indicator 例外：按计划补 150）
+      fina_audit: 120
+      fina_mainbz: 120
+      fina_indicator: 150
+      # 120/分钟 → 96
+      top10_holders: 96
+      top10_floatholders: 96
+      # 60/分钟 → 48（全项目最低档）
+      share_float: 48
+      pledge_stat: 48
+      pledge_detail: 48
+      repurchase: 48
+      # 1/分钟（不可调高）
+      report_rc: 1

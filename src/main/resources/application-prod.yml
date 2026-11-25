@@ -1,0 +1,25 @@
+# ============================================================
+# 生产配置（spring.profiles.active=prod，随 systemd 部署启用）
+# 敏感项全部环境变量注入，本文件不含任何明文密钥
+# ============================================================
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  # 生产库：SQLite 单文件库，放在持久化目录；可用 DB_URL 覆盖（例如 /data/refine-loop/db/refine_loop.db）
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    url: ${DB_URL:jdbc:sqlite:/data/refine-loop/db/refine_loop.db?journal_mode=WAL&busy_timeout=5000&date_class=TEXT&foreign_keys=on&synchronous=NORMAL}
+
+# 自定义集成密钥（后续任务消费，禁止写入明文）
+tushare:
+  token: ${TUSHARE_TOKEN:}
+
+llm:
+  dashscope:
+    api-key: ${DASHSCOPE_API_KEY:}
+
+logging:
+  file:
+    path: /data/refine-loop/logs

@@ -1,0 +1,4 @@
+/* 全局样式入口：顺序 = 令牌 → 布局骨架 → 通用组件 */
+@import './tokens.css';
+@import './base.css';
+@import './components.css';

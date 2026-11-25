@@ -1,0 +1,19 @@
+# ============================================================
+# 开发配置（spring.profiles.active=dev）
+# 核心作用：把「日志语句本来就是 debug」的业务包真正打开，同时不污染生产。
+# ============================================================
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    # 业务代码：DEBUG（阶段细节、逐表进度、缓存命中、SQL 参数）
+    com.arthur.refineloop: DEBUG
+    # MyBatis Mapper 接口名 = logger 名：打开后打印 SQL 与参数（配合 log-impl=slf4j）
+    com.arthur.refineloop.data.mapper: DEBUG
+    # 请求访问日志（RequestLogFilter 自己带有 isDebugEnabled 短路）
+    com.arthur.refineloop.common.log.RequestLogFilter: DEBUG
+    # 需要看 Spring MVC 映射/绑定细节时临时打开
+    org.springframework.web: INFO

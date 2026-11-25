@@ -1,0 +1,21 @@
+# ============================================================
+# T5 数据质量门（S0）阈值配置
+# 前缀 quality，绑定 com.arthur.refineloop.config.QualityProperties；
+# application.yml 已 optional import 本文件，缺省值与下方一致。
+# 口径：DataQualityGate 双层判定（契约 §8）：
+#   第①层 当日关键表 ingest_log 最新作业必须 SUCCESS；
+#   第②层 行数一致性 / 字段 sanity / 关键表时效。
+# 非交易日（trade_cal is_open='0'）→ 整体 EMPTY、逐项 SKIP，不算失败。
+# ============================================================
+quality:
+  # 第①层：当日必须有成功作业的关键表
+  critical-tables:
+    - daily
+    - adj_factor
+    - daily_basic
+    - fina_indicator
+    - trade_cal
+  # 第②层：daily 当日行数 vs stock_basic 在市(L)总数的允许偏差（绝对值比例）
+  row-count-deviation-threshold: 0.02
+  # 第②层：fina_indicator 最新 ann_date 距检查日的最大天数（超限 WARN）
+  fina-indicator-max-lag-days: 30

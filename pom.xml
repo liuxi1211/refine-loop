@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <!-- 注意：parent 版本不能引用本 POM properties，固定为基准清单值 -->
+        <version>3.5.16</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.refine.loop</groupId>
+    <artifactId>refine-loop</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <name>refine-loop</name>
+    <description>个人股票分析与验证闭环系统（单服务器单体应用）</description>
+
+    <!-- ============================================================
+         依赖版本基准（唯一来源：《技术架构与模块设计》§1 版本基准清单）
+         新增依赖须先登记该清单，禁止在此私自升版。
+         数据库引擎：SQLite（嵌入式单文件库，sqlite-jdbc），不再依赖 MySQL 服务进程。
+         后续任务按需引入：T7 引入 spring-ai/spring-ai-alibaba BOM。
+         ============================================================ -->
+    <properties>
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- 框架 -->
+        <spring-boot.version>3.5.16</spring-boot.version>
+        <spring-ai.version>1.1.2</spring-ai.version>
+        <spring-ai-alibaba.version>1.1.2.2</spring-ai-alibaba.version>
+        <spring-ai-extensions.version>1.1.2.1</spring-ai-extensions.version>
+
+        <!-- 数据与工具 -->
+        <mybatis-plus.version>3.5.15</mybatis-plus.version>
+        <sqlite-jdbc.version>3.50.3.0</sqlite-jdbc.version>
+        <fastjson2.version>2.0.61</fastjson2.version>
+        <hutool.version>5.8.44</hutool.version>
+        <commons-lang3.version>3.20.0</commons-lang3.version>
+        <guava.version>33.6.0-jre</guava.version>
+
+        <!-- 分析计算 -->
+        <ta4j.version>0.22.6</ta4j.version>
+        <commons-math3.version>3.6.1</commons-math3.version>
+
+        <!-- API 文档 -->
+        <springdoc.version>2.8.6</springdoc.version>
+
+        <!-- 测试：架构规则（不得在生产代码中引入） -->
+        <archunit.version>1.4.1</archunit.version>
+    </properties>
+
+    <dependencies>
+        <!-- Web（webmvc，非 WebFlux） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- API 文档 -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- 数据访问（ORM：MyBatis-Plus 实体/BaseMapper + MyBatis 动态 SQL Provider；批量走 BATCH 执行器） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+        <!-- 分页插件：MyBatis-Plus 3.5.9+ 把 PaginationInnerInterceptor 拆到独立模块，
+             不引入则 IPage 查询不会生成 LIMIT（配置见 config/MyBatisPlusConfig） -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-jsqlparser</artifactId>
+            <version>${mybatis-plus.version}</version>
+        </dependency>
+        <!-- 数据库：SQLite（嵌入式单文件库，无需独立服务进程；架构 §1 数据存储已改为 SQLite） -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>${sqlite-jdbc.version}</version>
+        </dependency>
+
+        <!-- 工具（T3 限流 / T3 客户端解析） -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>${guava.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.fastjson2</groupId>
+            <artifactId>fastjson2</artifactId>
+            <version>${fastjson2.version}</version>
+        </dependency>
+
+        <!-- 缓存：Spring Cache 抽象 + Caffeine 实现（架构 §1「本地缓存 Caffeine 3.x」）。
+             版本由 spring-boot-starter-parent 的 BOM 管理，不在此私自钉版本。
+             用途：参考数据缓存（股票列表/交易日历/行业映射/字典快照），能力见 common/cache。 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+
+        <!-- 参数校验：jakarta.validation + Hibernate Validator（@Valid / @EnumCode 统一走 400 出口） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- AOP：@LocalCache / @LocalCacheEvict 等横切组件的基础（AspectJ 表达式解析 + 代理） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
+        <!-- 样板代码消除（编译期） -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- 测试 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- 架构规则：把《开发规范 01-工程结构与包结构》的依赖矩阵与红线变成可执行测试
+             （ArchitectureRulesTest），仅测试作用域，不进入运行期依赖 -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- 仓库根 db/schema.sql 是唯一事实源；构建期复制进 classpath（db/schema.sql），
+             供运行期 SqliteSchemaInitializer 自动建表与单测读取，避免两份 DDL 漂移。 -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>db</directory>
+                <targetPath>db</targetPath>
+                <includes>
+                    <include>schema.sql</include>
+                </includes>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

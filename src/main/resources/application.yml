@@ -1,0 +1,118 @@
+# ============================================================
+# 通用配置（所有 profile 共享）
+# 敏感配置（token/key/密码）一律从环境变量读取，本文件不得出现明文密钥
+# ============================================================
+spring:
+  application:
+    name: refine-loop
+  threads:
+    virtual:
+      enabled: true   # Java 21 虚拟线程：流水线每标的并行 LLM 调用的运行时基础（架构 §2.2）
+  config:
+    import:
+      - optional:classpath:ratelimit.yml
+      - optional:classpath:quality.yml
+  # 优雅停机：先停止接收新请求，等在途请求（含正在落库的批次）完成再退出，避免 SQLite 写入被硬切
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  # 数据源：SQLite（嵌入式单文件库，无需独立数据库服务进程）。
+  # 启动时 SqliteSchemaInitializer 自动建目录并执行 db/schema.sql（全部 IF NOT EXISTS，幂等）。
+  # URL 参数说明：
+  #   journal_mode=WAL   写前日志，允许「1 写 + N 读」并发
+  #   busy_timeout=5000  写锁冲突时最多等待 5s 而不是立即 SQLITE_BUSY
+  #   date_class=TEXT    Java Timestamp 以 'yyyy-MM-dd HH:mm:ss' 文本落库，与 DEFAULT datetime('now','localtime') 同口径
+  #   foreign_keys=on / synchronous=NORMAL
+  datasource:
+    driver-class-name: org.sqlite.JDBC
+    url: ${DB_URL:jdbc:sqlite:./data/refine_loop.db?journal_mode=WAL&busy_timeout=5000&date_class=TEXT&foreign_keys=on&synchronous=NORMAL}
+    hikari:
+      # SQLite 只有单写者：连接数不宜过大，写冲突由 busy_timeout 串行等待
+      maximum-pool-size: 8
+      minimum-idle: 1
+      connection-timeout: 5000
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+  sql:
+    init:
+      mode: never   # schema 由 SqliteSchemaInitializer 显式执行（db/schema.sql），不走 Spring SQL init
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # SQLite 下 null 参数需要显式 JdbcType（驱动不接受 Types.OTHER 的 setNull）
+    jdbc-type-for-null: NULL
+    # LocalDateTime ↔ SQLite 文本（date_class=TEXT）的显式类型处理器
+    default-enum-type-handler: org.apache.ibatis.type.EnumTypeHandler
+    # SQL 走 slf4j：Mapper 接口 logger 调到 DEBUG 时才打印（application-dev.yml 已打开），
+    # 生产保持 INFO 不输出 SQL，避免日志被刷爆
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  type-handlers-package: com.arthur.refineloop.data.handler
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      # 插入/更新时跳过 null 字段：让 schema 的 DEFAULT（如 created_at/updated_at/status 默认值）生效
+      insert-strategy: not_null
+      update-strategy: not_null
+  mapper-locations: classpath*:/mapper/**/*.xml
+
+server:
+  port: 8080
+  # 优雅停机：收到 SIGTERM 后停止接收新请求，等在途请求完成再退出
+  shutdown: graceful
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+
+# Tushare 接入（T3）：token 只从环境变量注入，不入仓不入日志
+tushare:
+  base-url: ${TUSHARE_BASE_URL:http://api.tushare.pro}
+  token: ${TUSHARE_TOKEN:}
+  retry-count: 3
+  retry-backoff-millis: 1000
+  # T4 数据接入参数（per-stock 并发 ≤30 与限流叠加；批量写库 500 行/批）
+  ingest:
+    per-stock-concurrency: 30
+    full-start-date: "19901219"
+    incremental-fallback-days: 365
+    batch-size: 500
+    job-retry-count: 3
+    job-retry-backoff-millis: 1000
+    suspend-offset-limit: 100000
+
+logging:
+  level:
+    # 业务日志级别：生产 INFO（只留里程碑），开发用 application-dev.yml 覆盖为 DEBUG
+    com.arthur.refineloop: INFO
+    # 框架噪音收敛（这些库的 DEBUG 会淹没业务日志）
+    org.apache.ibatis: INFO
+    com.zaxxer.hikari: INFO
+    org.springframework.web: INFO
+
+# 应用线程池（@Async / 后台任务）；Java 21 虚拟线程默认开启（见 config/AsyncConfig）
+refine-loop:
+  threads:
+    virtual: true
+    core-size: 8
+    max-size: 32
+    queue-capacity: 200
+    keep-alive-seconds: 60
+    name-prefix: refine-
+  # 账号与登录（见 config/AuthProperties + web/auth/AuthInterceptor）
+  auth:
+    # 首次启动（sys_user 为空）自动创建管理员；生产建议关闭并自行导入账号
+    bootstrap-enabled: ${REFINE_LOOP_BOOTSTRAP_ENABLED:true}
+    bootstrap-username: ${REFINE_LOOP_BOOTSTRAP_USERNAME:admin}
+    # 默认密码只用于首次登录，登录后必须立即修改；生产必须用环境变量覆盖
+    bootstrap-password: ${REFINE_LOOP_BOOTSTRAP_PASSWORD:admin123}
+    # 登录令牌绝对有效期（天），到期需重新登录
+    token-ttl-days: ${REFINE_LOOP_TOKEN_TTL_DAYS:7}
+    # 密码最小长度（管理员重置与自助改密共用）
+    password-min-length: ${REFINE_LOOP_PASSWORD_MIN_LENGTH:8}
+
+# 数据库文件：默认 ./data/refine_loop.db（相对启动目录），可用环境变量 DB_URL 覆盖为绝对路径
+# LLM 接入（T7 任务引入）：DASHSCOPE_API_KEY（环境变量）

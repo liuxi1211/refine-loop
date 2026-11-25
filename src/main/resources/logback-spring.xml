@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  滚动文件日志（无外部日志服务，架构 §1 选型）。
+  三件事只在这里定义，避免多处漂移：
+    1) 格式：时间 线程 级别 logger [traceId] - 消息（traceId 来自 MDC，见 TraceContext）；
+    2) 滚动：按天 + 按大小（50MB），保留 30 天 / 总量 2GB；
+    3) 级别：默认 INFO；开发期用 application-dev.yml 把业务包调到 DEBUG（日志语句本身以 debug 为主）。
+  文件写入走 AsyncAppender：磁盘抖动不阻塞业务线程；discardingThreshold=0 表示宁可阻塞也不丢日志
+  （盘后批处理的日志是事后唯一证据，丢不起）。
+-->
+<configuration>
+
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.path" defaultValue="logs"/>
+
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{40} [%X{traceId}] - %msg%n"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_PATH}/refine-loop.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/refine-loop.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>2048</queueSize>
+        <!-- 0 = 队列满也不丢弃任何日志（默认 20% 会静默丢弃 ERROR/WARN 以下的事件） -->
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>false</neverBlock>
+        <includeCallerData>false</includeCallerData>
+        <appender-ref ref="FILE"/>
+    </appender>
+
+    <!-- 默认 INFO：生产只留业务里程碑（作业完成、质量门结果、编排摘要） -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+    </root>
+
+    <!-- 业务包默认 INFO；开发期由 application-dev.yml 覆盖为 DEBUG（唯一开关，别在这里写死） -->
+    <logger name="com.arthur.refineloop" level="INFO"/>
+
+    <!-- 框架噪音收敛：这些库的 DEBUG 会把业务日志彻底淹没 -->
+    <logger name="org.apache.ibatis" level="INFO"/>
+    <logger name="com.zaxxer.hikari" level="INFO"/>
+    <logger name="org.springframework.web" level="INFO"/>
+    <logger name="org.springframework.boot" level="INFO"/>
+
+</configuration>

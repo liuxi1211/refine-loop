@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>数据中心 · Tushare 接入运维台 — 交互原型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0e1621; --ink-2:#1a2634; --ink-3:#2a3a4c;
+  --bg:#f4f6f8; --card:#ffffff; --line:#e4e8ee; --line-2:#eef1f5;
+  --tx:#1f2b38; --tx-2:#5a6b7d; --tx-3:#8b9aa9;
+  --blue:#2f6fed; --blue-d:#1e5ad6; --blue-bg:#ecf2fe;
+  --green:#16a34a; --green-bg:#e8f7ee;
+  --amber:#d97706; --amber-bg:#fdf3e3;
+  --red:#dc2626; --red-bg:#fdecec;
+  --gray-bg:#f1f3f6;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --sans:'IBM Plex Sans',-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;
+  --sh:0 1px 2px rgba(14,22,33,.05),0 4px 16px rgba(14,22,33,.05);
+  --sh-lg:0 8px 40px rgba(14,22,33,.18);
+  --r:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--tx);font-size:13.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
+::selection{background:var(--blue);color:#fff}
+
+/* ============ 布局骨架 ============ */
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:212px;background:var(--ink);color:#93a4b5;display:flex;flex-direction:column;flex-shrink:0}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.content{flex:1;overflow-y:auto;padding:22px 26px 48px}
+
+/* 侧边栏 */
+.brand{padding:18px 18px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06)}
+.brand-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#2f6fed,#7c3aed);display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;letter-spacing:-.5px}
+.brand-name{color:#fff;font-weight:600;font-size:14.5px;letter-spacing:.2px}
+.brand-sub{font-size:10.5px;color:#5f7285;font-family:var(--mono)}
+.nav-group-label{padding:18px 20px 6px;font-size:10.5px;letter-spacing:1.5px;color:#55697d;font-weight:600}
+.nav-item{display:flex;align-items:center;gap:10px;margin:2px 10px;padding:8.5px 12px;border-radius:8px;cursor:pointer;transition:.15s;font-size:13.5px;color:#a9b8c6;position:relative;user-select:none}
+.nav-item:hover{background:rgba(255,255,255,.05);color:#e5edf5}
+.nav-item.active{background:linear-gradient(90deg,rgba(47,111,237,.22),rgba(47,111,237,.08));color:#fff;font-weight:500}
+.nav-item.active::before{content:'';position:absolute;left:-10px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--blue)}
+.nav-item .ico{width:17px;text-align:center;font-size:14px;opacity:.9}
+.nav-item .cnt{margin-left:auto;font-size:10.5px;font-family:var(--mono);background:rgba(255,255,255,.08);padding:1px 7px;border-radius:8px}
+.nav-item .cnt.warn{background:rgba(220,38,38,.25);color:#fca5a5}
+.side-foot{margin-top:auto;padding:14px 18px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:#55697d}
+.side-foot .row{display:flex;justify-content:space-between;margin:3px 0}
+.side-foot .ok{color:#4ade80}
+.token-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ade80;margin-right:5px;box-shadow:0 0 6px rgba(74,222,128,.7)}
+
+/* 顶部栏 */
+.topbar{height:52px;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 26px;gap:14px;flex-shrink:0}
+.crumb{font-size:13px;color:var(--tx-2)}
+.crumb b{color:var(--tx);font-weight:600}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.tag{font-size:11px;padding:2.5px 9px;border-radius:6px;font-weight:500}
+.tag.env{background:var(--gray-bg);color:var(--tx-2);font-family:var(--mono)}
+.tag.ver{background:var(--blue-bg);color:var(--blue-d);font-family:var(--mono)}
+.tag.trade{background:var(--green-bg);color:var(--green)}
+.proto-note{font-size:11px;color:var(--tx-3);border:1px dashed var(--line);padding:2.5px 10px;border-radius:6px}
+
+/* ============ 通用组件 ============ */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}
+.card-h{display:flex;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line-2);gap:10px}
+.card-h h3{font-size:14px;font-weight:600}
+.card-h .sub{font-size:12px;color:var(--tx-3)}
+.card-h .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.card-b{padding:16px 18px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);color:var(--tx);font-size:12.5px;font-weight:500;padding:6px 13px;border-radius:7px;cursor:pointer;transition:.15s;font-family:var(--sans);white-space:nowrap}
+.btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg)}
+.btn:active{transform:scale(.97)}
+.btn.pri{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.pri:hover{background:var(--blue-d);border-color:var(--blue-d);color:#fff}
+.btn.danger{color:var(--red);border-color:#f3c1c1}
+.btn.danger:hover{background:var(--red-bg);border-color:var(--red)}
+.btn.sm{padding:3.5px 10px;font-size:12px;border-radius:6px}
+.btn.txt{border:none;background:none;padding:4px 8px;color:var(--blue)}
+.btn.txt:hover{background:var(--blue-bg)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.btn .ico{font-size:13px}
+
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 9px;border-radius:20px;font-weight:500;white-space:nowrap}
+.chip .d{width:6px;height:6px;border-radius:50%}
+.chip.ok{background:var(--green-bg);color:var(--green)}.chip.ok .d{background:var(--green)}
+.chip.warn{background:var(--amber-bg);color:var(--amber)}.chip.warn .d{background:var(--amber)}
+.chip.err{background:var(--red-bg);color:var(--red)}.chip.err .d{background:var(--red)}
+.chip.idle{background:var(--gray-bg);color:var(--tx-3)}.chip.idle .d{background:var(--tx-3)}
+.chip.run{background:var(--blue-bg);color:var(--blue-d)}.chip.run .d{background:var(--blue);animation:pulse 1.1s infinite}
+.chip.off{background:#f5f5f4;color:#a8a29e;border:1px dashed #ddd6ce}
+@keyframes pulse{50%{opacity:.25}}
+
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%}
+.dot.ok{background:var(--green)}.dot.warn{background:var(--amber)}.dot.err{background:var(--red)}.dot.idle{background:#cfd6de}
+.dot.pulse{animation:pulse 1.2s infinite}
+
+code,.mono{font-family:var(--mono);font-size:.92em}
+code.k{background:var(--gray-bg);padding:1.5px 6px;border-radius:5px;color:var(--tx-2);font-size:11.5px}
+
+/* 表格 */
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;padding:9px 14px;font-size:11.5px;color:var(--tx-3);font-weight:600;letter-spacing:.3px;border-bottom:1px solid var(--line);background:#fafbfc;white-space:nowrap;position:sticky;top:0;z-index:2}
+.tbl td{padding:9px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle;white-space:nowrap}
+.tbl tbody tr{transition:.12s}
+.tbl tbody tr:hover{background:#f7f9fc}
+.tbl .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tbl .dim{color:var(--tx-2)}
+.scroll-y{overflow-y:auto}
+.ops{display:flex;gap:2px;justify-content:flex-end}
+
+/* 统计卡 */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:15px 18px;box-shadow:var(--sh);position:relative;overflow:hidden}
+.stat::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue);opacity:.85}
+.stat.g::after{background:var(--green)}.stat.a::after{background:var(--amber)}.stat.r::after{background:var(--red)}
+.stat .lb{font-size:12px;color:var(--tx-2);font-weight:500}
+.stat .v{font-size:26px;font-weight:700;font-family:var(--mono);letter-spacing:-.5px;margin-top:3px;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:13px;color:var(--tx-3);font-weight:500;margin-left:3px;font-family:var(--sans)}
+.stat .tr{font-size:11.5px;margin-top:2px;color:var(--tx-3)}
+.stat .tr b{font-weight:600}
+.stat .bg-ico{position:absolute;right:12px;top:12px;font-size:20px;opacity:.12}
+
+/* 分组条 */
+.grp-bar{display:flex;align-items:center;gap:8px;padding:14px 4px 8px;font-weight:600;font-size:13.5px}
+.grp-bar .n{font-size:11px;color:var(--tx-3);font-weight:400;font-family:var(--mono)}
+.grp-bar .ln{flex:1;height:1px;background:var(--line)}
+
+/* 表单 */
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12px;color:var(--tx-2);font-weight:500;margin-bottom:5px}
+.inp,.sel{width:100%;border:1px solid var(--line);border-radius:7px;padding:7.5px 11px;font-size:13px;font-family:var(--sans);background:var(--card);color:var(--tx);outline:none;transition:.15s}
+.inp:focus,.sel:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,111,237,.12)}
+.field .hint{font-size:11.5px;color:var(--tx-3);margin-top:4px}
+.seg{display:flex;background:var(--gray-bg);border-radius:8px;padding:3px;gap:2px}
+.seg button{flex:1;border:none;background:none;padding:6px 10px;border-radius:6px;font-size:12.5px;cursor:pointer;color:var(--tx-2);font-family:var(--sans);font-weight:500;transition:.15s}
+.seg button.on{background:var(--card);color:var(--tx);box-shadow:0 1px 4px rgba(14,22,33,.1)}
+
+/* 开关 */
+.sw{display:inline-flex;align-items:center;cursor:pointer;user-select:none}
+.sw .tr{width:34px;height:19px;border-radius:10px;background:#cbd5e1;position:relative;transition:.2s}
+.sw .tr::after{content:'';position:absolute;left:2.5px;top:2.5px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.sw.on .tr{background:var(--blue)}
+.sw.on .tr::after{left:17.5px}
+.sw .tx{margin-left:8px;font-size:12px;color:var(--tx-2)}
+
+/* 进度条 */
+.pgb{height:6px;background:var(--gray-bg);border-radius:4px;overflow:hidden;position:relative}
+.pgb>i{display:block;height:100%;border-radius:4px;background:var(--blue);transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.pgb>i.warn{background:var(--amber)}
+.pgb>i.danger{background:var(--red)}
+.pgb>i.ok{background:var(--green)}
+
+/* 弹窗 */
+.mask{position:fixed;inset:0;background:rgba(14,22,33,.45);backdrop-filter:blur(2px);display:none;place-items:center;z-index:50;animation:fadeIn .18s}
+.mask.show{display:grid}
+@keyframes fadeIn{from{opacity:0}}
+.modal{width:560px;max-width:92vw;background:var(--card);border-radius:14px;box-shadow:var(--sh-lg);animation:up .22s cubic-bezier(.2,.9,.3,1.2);max-height:88vh;display:flex;flex-direction:column}
+@keyframes up{from{opacity:0;transform:translateY(14px) scale(.98)}}
+.modal-h{padding:16px 20px;border-bottom:1px solid var(--line-2);display:flex;align-items:center}
+.modal-h h3{font-size:15px;font-weight:600}
+.modal-h .x{margin-left:auto;cursor:pointer;color:var(--tx-3);font-size:18px;line-height:1;padding:2px 6px;border-radius:6px}
+.modal-h .x:hover{background:var(--gray-bg);color:var(--tx)}
+.modal-b{padding:18px 20px;overflow-y:auto}
+.modal-f{padding:13px 20px;border-top:1px solid var(--line-2);display:flex;justify-content:flex-end;gap:9px}
+
+/* Toast */
+.toasts{position:fixed;top:16px;right:20px;z-index:99;display:flex;flex-direction:column;gap:9px}
+.toast{background:var(--ink);color:#e8eef5;padding:10px 16px;border-radius:9px;font-size:13px;box-shadow:var(--sh-lg);display:flex;align-items:center;gap:9px;animation:tin .25s cubic-bezier(.2,.9,.3,1.2);max-width:380px}
+@keyframes tin{from{opacity:0;transform:translateX(30px)}}
+.toast.out{opacity:0;transform:translateX(30px);transition:.3s}
+.toast .ic{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex-shrink:0}
+.toast.ok .ic{background:var(--green)}.toast.err .ic{background:var(--red)}.toast.info .ic{background:var(--blue)}
+
+/* 页面切换 */
+.view{display:none;animation:vIn .25s ease}
+.view.on{display:block}
+@keyframes vIn{from{opacity:0;transform:translateY(6px)}}
+.page-h{display:flex;align-items:flex-start;margin-bottom:16px;gap:12px}
+.page-h h2{font-size:18px;font-weight:700;letter-spacing:-.2px}
+.page-h .desc{font-size:12.5px;color:var(--tx-2);margin-top:2px}
+.page-h .right{margin-left:auto;display:flex;gap:9px;align-items:center}
+
+/* 入场动画 */
+.rv{animation:rv .4s cubic-bezier(.2,.8,.3,1) both}
+@keyframes rv{from{opacity:0;transform:translateY(10px)}}
+.d1{animation-delay:.03s}.d2{animation-delay:.07s}.d3{animation-delay:.11s}.d4{animation-delay:.15s}.d5{animation-delay:.19s}
+
+/* 总览表筛选 */
+.filters{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.f-chip{font-size:12px;padding:4.5px 13px;border-radius:18px;border:1px solid var(--line);cursor:pointer;color:var(--tx-2);background:var(--card);transition:.15s;font-weight:500}
+.f-chip:hover{border-color:var(--blue);color:var(--blue)}
+.f-chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.filters .search{margin-left:auto;position:relative}
+.filters .search input{width:220px;padding:6.5px 11px 6.5px 30px;border:1px solid var(--line);border-radius:7px;font-size:12.5px;outline:none;font-family:var(--sans)}
+.filters .search input:focus{border-color:var(--blue)}
+.filters .search::before{content:'⌕';position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--tx-3);font-size:14px}
+
+/* 质量门检查项 */
+.q-item{display:flex;align-items:flex-start;gap:11px;padding:11px 16px;border-bottom:1px solid var(--line-2);animation:rv .3s both}
+.q-item:last-child{border-bottom:none}
+.q-ico{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11px;flex-shrink:0;margin-top:1px}
+.q-ico.pass{background:var(--green-bg);color:var(--green)}
+.q-ico.fail{background:var(--red-bg);color:var(--red)}
+.q-ico.wait{background:var(--gray-bg);color:var(--tx-3)}
+.q-item .t{font-weight:500;font-size:13px}
+.q-item .s{font-size:12px;color:var(--tx-2);margin-top:1px}
+.q-item .s .mono{color:var(--tx)}
+.q-item .s b.fail-t{color:var(--red);font-weight:600}
+
+/* 限流行 */
+.rl-row{display:grid;grid-template-columns:200px 110px 1fr 110px 100px 90px;gap:14px;align-items:center;padding:11px 18px;border-bottom:1px solid var(--line-2);transition:.12s}
+.rl-row:hover{background:#f7f9fc}
+.rl-row .api{font-family:var(--mono);font-size:12.5px;font-weight:600}
+.rl-row .badge{font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;vertical-align:1px;font-weight:600}
+.badge.b-low{background:var(--red-bg);color:var(--red)}
+.badge.b-new{background:var(--amber-bg);color:var(--amber)}
+.badge.b-off{background:var(--gray-bg);color:var(--tx-3)}
+.rl-head{font-size:11px;color:var(--tx-3);font-weight:600;letter-spacing:.3px;border-bottom:1px solid var(--line);background:#fafbfc;padding:8px 18px}
+.rl-num{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums}
+
+/* 分钟调用图 */
+.spark{display:flex;align-items:flex-end;gap:2.5px;height:38px}
+.spark i{width:7px;border-radius:2px 2px 0 0;background:var(--blue);opacity:.75;min-height:2px}
+.spark i.hot{background:var(--red);opacity:.9}
+
+/* 编排分层 */
+.stage-lane{display:flex;align-items:center;gap:10px;padding:10px 0}
+.stage-lane .lb{width:88px;font-size:12px;font-weight:600;color:var(--tx-2);flex-shrink:0;text-align:right}
+.stage-chips{display:flex;gap:6px;flex-wrap:wrap}
+.s-chip{font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:6px;background:var(--gray-bg);color:var(--tx-2);border:1px solid transparent}
+.s-chip.done{background:var(--green-bg);color:var(--green)}
+.s-chip.run{background:var(--blue-bg);color:var(--blue-d);border-color:rgba(47,111,237,.35);animation:pulse 1.2s infinite}
+.s-chip.fail{background:var(--red-bg);color:var(--red)}
+.s-chip.wait{opacity:.55}
+.stage-arr{color:var(--tx-3);font-size:12px;margin:0 2px}
+
+/* 时间线 */
+.tl{position:relative;padding-left:20px}
+.tl::before{content:'';position:absolute;left:5px;top:6px;bottom:6px;width:1.5px;background:var(--line)}
+.tl-item{position:relative;padding:6px 0 6px 8px;font-size:12.5px}
+.tl-item::before{content:'';position:absolute;left:-18px;top:12px;width:8px;height:8px;border-radius:50%;background:var(--card);border:2px solid var(--tx-3)}
+.tl-item.ok::before{border-color:var(--green)}
+.tl-item.err::before{border-color:var(--red)}
+.tl-item.run::before{border-color:var(--blue);background:var(--blue);animation:pulse 1.2s infinite}
+.tl-item .t{color:var(--tx-3);font-family:var(--mono);font-size:11.5px;margin-right:8px}
+
+/* 空态 */
+.empty{padding:34px;text-align:center;color:var(--tx-3);font-size:12.5px}
+.empty .big{font-size:30px;margin-bottom:8px;opacity:.5}
+
+/* 键值对 */
+.kv{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.kv .it{background:#fafbfc;border:1px solid var(--line-2);border-radius:8px;padding:9px 12px}
+.kv .it .k{font-size:11px;color:var(--tx-3);font-weight:500}
+.kv .it .v{font-size:12.5px;font-weight:600;margin-top:2px;word-break:break-all;font-family:var(--mono)}
+
+/* 迷你柱状 */
+.mini-bars{display:flex;align-items:flex-end;gap:2px;height:22px}
+.mini-bars i{width:4px;background:var(--blue);opacity:.6;border-radius:1px}
+
+/* 分页 */
+.pgn{display:flex;align-items:center;gap:6px;justify-content:flex-end;padding:11px 16px;font-size:12.5px;color:var(--tx-2)}
+.pgn button{border:1px solid var(--line);background:var(--card);border-radius:6px;min-width:26px;height:26px;cursor:pointer;font-size:12px;color:var(--tx-2)}
+.pgn button.cur{background:var(--blue);border-color:var(--blue);color:#fff}
+.pgn button:hover:not(.cur){border-color:var(--blue);color:var(--blue)}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{border:none;background:none;padding:8px 16px;font-size:13px;cursor:pointer;color:var(--tx-2);border-bottom:2px solid transparent;font-family:var(--sans);font-weight:500;margin-bottom:-1px}
+.tabs button.on{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
+
+/* 抽屉 */
+.dmask{position:fixed;inset:0;background:rgba(14,22,33,.45);backdrop-filter:blur(2px);display:none;z-index:40;animation:fadeIn .18s}
+.dmask.show{display:block}
+.drawer{position:fixed;top:0;right:-780px;width:760px;max-width:94vw;height:100vh;background:var(--card);box-shadow:var(--sh-lg);z-index:41;transition:right .3s cubic-bezier(.2,.8,.3,1);display:flex;flex-direction:column}
+.drawer.show{right:0}
+.drawer-h{padding:16px 20px;border-bottom:1px solid var(--line-2);display:flex;align-items:flex-start;gap:10px}
+.drawer-b{flex:1;overflow-y:auto;padding:16px 20px 28px}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-2-1{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+.mb14{margin-bottom:14px}
+.mt14{margin-top:14px}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ================= 侧边栏 ================= -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo">RL</div>
+      <div>
+        <div class="brand-name">RefineLoop</div>
+        <div class="brand-sub">数据中心 · 运维台</div>
+      </div>
+    </div>
+    <div class="nav-group-label">数据接入管理</div>
+    <div class="nav-item active" data-v="overview"><span class="ico">▦</span>数据总览<span class="cnt" id="nav-tbl-cnt">41</span></div>
+    <div class="nav-item" data-v="jobs"><span class="ico">⟳</span>接入作业<span class="cnt warn" id="nav-job-cnt">1 失败</span></div>
+    <div class="nav-group-label">分析工作台</div>
+    <div class="nav-item" onclick="toast('info','M1 分析端页面：今日简报 / 候选池 / 个股详情 / 判断列表 / 系统中心，见《前端设计详案》，不在本原型范围')"><span class="ico">◈</span>今日简报<span class="cnt">M1</span></div>
+    <div class="nav-item" onclick="toast('info','M1 分析端页面，不在本原型范围')"><span class="ico">◈</span>系统中心<span class="cnt">M1</span></div>
+    <div class="side-foot">
+      <div class="row"><span>Tushare Token</span><span class="ok"><span class="token-dot"></span>已配置</span></div>
+      <div class="row"><span>最新交易日</span><span class="mono" style="color:#a9b8c6">20261121</span></div>
+    </div>
+  </aside>
+
+  <!-- ================= 主区 ================= -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb" id="crumb">数据中心 / <b>数据总览</b></div>
+      <div class="top-right">
+        <span class="proto-note">高保真交互原型 · 数据为模拟</span>
+        <span class="tag env">PROD</span>
+        <span class="tag ver">method-v1</span>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ============ V1 数据总览 ============ -->
+      <section class="view on" id="v-overview">
+        <div class="page-h rv">
+          <div>
+            <h2>数据总览</h2>
+            <div class="desc">41 张 Tushare 数据表的健康度与新鲜度一屏总览 · 状态口径：最新业务日期距今 ≤2 个交易日为健康</div>
+          </div>
+          <div class="right">
+            <button class="btn pri" onclick="runDailyPipeline()">▶ 一键每日增量</button>
+            <button class="btn" onclick="go('jobs')">作业历史 →</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat rv d1"><div class="bg-ico">▦</div><div class="lb">表健康度</div><div class="v">35<small>/ 41</small></div><div class="tr"><b style="color:var(--green)">35 健康</b> · <b style="color:var(--amber)">4 滞后</b> · <b style="color:var(--red)">1 失败</b> · <b style="color:var(--tx-3)">1 未回填</b></div></div>
+          <div class="stat g rv d2"><div class="bg-ico">⟳</div><div class="lb">今日作业</div><div class="v">52<small>次</small></div><div class="tr"><b style="color:var(--green)">49 成功</b> · <b style="color:var(--red)">1 失败</b> · <b style="color:var(--blue)">2 运行中</b></div></div>
+          <div class="stat rv d3"><div class="bg-ico">≋</div><div class="lb">今日 Tushare 调用</div><div class="v">1,847</div><div class="tr">较昨日 <b style="color:var(--green)">+12%</b> · 峰值分钟 61 次</div></div>
+          <div class="stat g rv d4" style="cursor:pointer" onclick="go('jobs');jtab('quality')"><div class="bg-ico">✓</div><div class="lb">数据质量门 (S0)</div><div class="v" style="font-size:21px;line-height:1.3">达标</div><div class="tr">11-21 17:35 · 5 项检查全部通过 · 点击查看</div></div>
+        </div>
+
+        <div class="card rv d2">
+          <div class="card-h">
+            <h3>数据表清单</h3><span class="sub">按分组展示 · 点击行进入表详情</span>
+            <div class="right">
+              <button class="btn sm" onclick="toast('ok','已刷新：行数与最新日期重查询完成')">刷新统计</button>
+            </div>
+          </div>
+          <div class="card-b" style="padding-bottom:6px">
+            <div class="filters">
+              <span class="f-chip on" data-g="all" onclick="fltGrp(this)">全部 41</span>
+              <span class="f-chip" data-g="维表" onclick="fltGrp(this)">维表 6</span>
+              <span class="f-chip" data-g="行情" onclick="fltGrp(this)">行情 9</span>
+              <span class="f-chip" data-g="财务" onclick="fltGrp(this)">财务 10</span>
+              <span class="f-chip" data-g="事件" onclick="fltGrp(this)">事件 13</span>
+              <span class="f-chip" data-g="指数与市场" onclick="fltGrp(this)">指数与市场 3</span>
+              <div class="search"><input placeholder="搜索表名 / api_name" oninput="fltKw(this.value)"></div>
+            </div>
+          </div>
+          <div class="scroll-y" style="max-height:calc(100vh - 420px)">
+            <table class="tbl">
+              <thead><tr>
+                <th style="width:24px"></th><th>数据表</th><th>api_name</th><th>更新策略</th><th class="num" style="text-align:right">行数</th><th>最新业务日期</th><th style="text-align:center">新鲜度</th><th>上次作业</th><th>每日增量</th><th style="text-align:right">快捷操作</th>
+              </tr></thead>
+              <tbody id="ov-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 表详情已改为右侧抽屉 openDrawer()，由数据总览行点击唤起 -->
+
+      <!-- ============ V2 接入作业 ============ -->
+      <section class="view" id="v-jobs">
+        <div class="page-h rv">
+          <div>
+            <h2>接入作业</h2>
+            <div class="desc">IngestOrchestrator 编排入口 · 依赖分层：维表层 → 行情层 → 财务与事件层 · 每表作业写 ingest_log</div>
+          </div>
+          <div class="right">
+            <button class="btn" onclick="dlgShow('dlg-backfill-wizard')">⤓ 初始回填向导</button>
+            <button class="btn pri" onclick="runDailyPipeline()">▶ 一键每日增量</button>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <button class="on" id="jtab-btn-jobs" onclick="jtab('jobs')">作业编排与历史</button>
+          <button id="jtab-btn-quality" onclick="jtab('quality')">数据质量门 (S0)</button>
+        </div>
+
+        <div id="jpane-jobs">
+        <div class="card mb14 rv d1">
+          <div class="card-h">
+            <h3>运行中编排</h3><span class="sub mono">RUN-20261121-001</span>
+            <div class="right"><span class="chip run"><span class="d"></span>行情层执行中 · 4/18 表</span><button class="btn sm danger" onclick="confirmDlg('暂停编排','暂停后当前表作业完成即停，未开始表不再执行。确定暂停？',()=>{toast('ok','编排已标记暂停，当前作业完成后停止')})">暂停</button></div>
+          </div>
+          <div class="card-b">
+            <div class="stage-lane">
+              <span class="lb">① 维表层</span>
+              <div class="stage-chips">
+                <span class="s-chip done">stock_basic ✓</span><span class="s-chip done">trade_cal ✓</span><span class="s-chip done">namechange ✓</span><span class="s-chip done">index_basic ✓</span><span class="s-chip done">sw_industry ✓</span><span class="s-chip done">sw_member ✓</span>
+              </div>
+              <span style="margin-left:auto;font-size:11.5px;color:var(--green)">6/6 · 42s</span>
+            </div>
+            <div class="stage-lane">
+              <span class="lb">② 行情层</span>
+              <div class="stage-chips">
+                <span class="s-chip done">daily ✓</span><span class="s-chip done">adj_factor ✓</span><span class="s-chip done">daily_basic ✓</span><span class="s-chip run">moneyflow ⟳</span><span class="s-chip wait">stk_limit</span><span class="s-chip wait">weekly</span><span class="s-chip wait">monthly</span><span class="s-chip wait">index_daily</span>
+              </div>
+              <span style="margin-left:auto;font-size:11.5px;color:var(--blue)">3/8 · 运行中</span>
+            </div>
+            <div class="stage-lane">
+              <span class="lb">③ 财务·事件层</span>
+              <div class="stage-chips">
+                <span class="s-chip wait">fina_indicator</span><span class="s-chip wait">income</span><span class="s-chip wait">top_list</span><span class="s-chip wait">margin</span><span class="s-chip wait off">hk_hold（M1 停用）</span><span class="s-chip wait">…共 27 表</span>
+              </div>
+              <span style="margin-left:auto;font-size:11.5px;color:var(--tx-3)">等待前置层</span>
+            </div>
+            <div style="margin-top:8px;padding-top:10px;border-top:1px dashed var(--line);display:flex;align-items:center;gap:12px">
+              <span style="font-size:12px;color:var(--tx-2)">整体进度</span>
+              <div class="pgb" style="flex:1"><i style="width:38%"></i></div>
+              <span class="mono" style="font-size:12px">9/41 表 · 02:14</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card rv d2">
+          <div class="card-h">
+            <h3>作业历史</h3><span class="sub">ingest_log</span>
+            <div class="right">
+              <select class="sel" style="width:130px;padding:5px 9px;font-size:12px"><option>全部状态</option><option>成功</option><option>失败</option><option>运行中</option></select>
+              <select class="sel" style="width:130px;padding:5px 9px;font-size:12px"><option>全部表</option><option>daily</option><option>fina_indicator</option><option>report_rc</option></select>
+            </div>
+          </div>
+          <div class="scroll-y" style="max-height:460px">
+            <table class="tbl">
+              <thead><tr><th>开始时间</th><th>表</th><th>类型</th><th>范围</th><th style="text-align:right">拉取行数</th><th style="text-align:right">落库行数</th><th style="text-align:right">耗时</th><th>状态</th><th>错误摘要</th><th style="text-align:right">操作</th></tr></thead>
+              <tbody>
+                <tr><td class="num dim">11-21 17:42:10</td><td><code class="k mono">daily</code></td><td>增量</td><td class="mono dim">20261121</td><td class="num" style="text-align:right">5,412</td><td class="num" style="text-align:right">5,412</td><td class="num dim" style="text-align:right">8.2s</td><td><span class="chip ok"><span class="d"></span>成功</span></td><td class="dim">—</td><td><div class="ops"><button class="btn sm txt" onclick="toast('info','查看该表详情')">详情</button></div></td></tr>
+                <tr><td class="num dim">11-21 17:39:44</td><td><code class="k mono">report_rc</code></td><td>增量</td><td class="mono dim">近90天</td><td class="num" style="text-align:right">312</td><td class="num" style="text-align:right">—</td><td class="num dim" style="text-align:right">61.3s</td><td><span class="chip err"><span class="d"></span>失败</span></td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;color:var(--red)" title="40203 每分钟超限,重试3次退避后仍失败,今日额度10次已耗尽">40203 每分钟超限，退避重试3次仍失败，今日10次额度耗尽</td><td><div class="ops"><button class="btn sm danger" onclick="toast('ok','report_rc 重试已入队：限流器将等待下一分钟窗口')">重试</button></div></td></tr>
+                <tr><td class="num dim">11-21 17:41:38</td><td><code class="k mono">margin_detail</code></td><td>增量</td><td class="mono dim">20261121</td><td class="num" style="text-align:right">3,881</td><td class="num" style="text-align:right">3,881</td><td class="num dim" style="text-align:right">6.1s</td><td><span class="chip ok"><span class="d"></span>成功</span></td><td class="dim">—</td><td><div class="ops"><button class="btn sm txt">详情</button></div></td></tr>
+                <tr><td class="num dim">11-21 17:41:02</td><td><code class="k mono">fina_indicator</code></td><td>增量</td><td class="mono dim">per-stock 近1年</td><td class="num" style="text-align:right">4,966</td><td class="num" style="text-align:right">4,966</td><td class="num dim" style="text-align:right">22m48s</td><td><span class="chip run"><span class="d"></span>运行中</span></td><td class="dim">并发 28 · 已 3,120/4,966 股</td><td><div class="ops"><button class="btn sm txt" onclick="toast('info','运行中作业不可重试')">详情</button></div></td></tr>
+                <tr><td class="num dim">11-20 17:38:15</td><td><code class="k mono">stk_holdernumber</code></td><td>周度全量</td><td class="mono dim">全市场</td><td class="num" style="text-align:right">31,204</td><td class="num" style="text-align:right">31,204</td><td class="num dim" style="text-align:right">52m11s</td><td><span class="chip ok"><span class="d"></span>成功</span></td><td class="dim">—</td><td><div class="ops"><button class="btn sm txt">详情</button></div></td></tr>
+                <tr><td class="num dim">11-20 17:36:02</td><td><code class="k mono">pledge_stat</code></td><td>增量</td><td class="mono dim">20261120(周五)</td><td class="num" style="text-align:right">5,402</td><td class="num" style="text-align:right">5,402</td><td class="num dim" style="text-align:right">34.5s</td><td><span class="chip ok"><span class="d"></span>成功</span></td><td class="dim">6 页 × 1000 行</td><td><div class="ops"><button class="btn sm txt">详情</button></div></td></tr>
+                <tr><td class="num dim">11-19 17:44:30</td><td><code class="k mono">fina_mainbz</code></td><td>增量</td><td class="mono dim">20260930 期</td><td class="num" style="text-align:right">18,442</td><td class="num" style="text-align:right">—</td><td class="num dim" style="text-align:right">12m03s</td><td><span class="chip warn"><span class="d"></span>部分成功</span></td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;color:var(--amber)" title="3 只股票单期失败,已记录告警不中断">3 只股票单期失败（601127.SH 等），已告警不中断</td><td><div class="ops"><button class="btn sm danger" onclick="toast('ok','仅重试 3 只失败股票的 20260930 期')">补拉失败项</button></div></td></tr>
+                <tr><td class="num dim">11-18 17:39:12</td><td><code class="k mono">daily</code></td><td>增量</td><td class="mono dim">20261118</td><td class="num" style="text-align:right">5,421</td><td class="num" style="text-align:right">5,421</td><td class="num dim" style="text-align:right">41.8s</td><td><span class="chip ok"><span class="d"></span>重试成功</span></td><td class="dim">首次网络超时，退避后成功</td><td><div class="ops"><button class="btn sm txt">详情</button></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        </div><!-- /jpane-jobs -->
+
+        <div id="jpane-quality" style="display:none">
+          <div style="display:flex;align-items:center;margin-bottom:14px;gap:12px">
+            <div>
+              <div style="font-weight:700;font-size:15px">数据质量门 <span class="chip ok" style="vertical-align:2px;margin-left:4px"><span class="d"></span>今日达标</span></div>
+              <div style="font-size:12.5px;color:var(--tx-2);margin-top:2px">DataQualityGate · 流水线 S0 双层判定：① 当日关键表作业状态 ② 行数一致性与字段 sanity · 不达标将挂起整线并告警</div>
+            </div>
+            <div style="margin-left:auto"><button class="btn pri" onclick="runQuality()">✓ 立即执行 S0 检查</button></div>
+          </div>
+
+          <div class="card mb14" id="q-result">
+          <div class="card-h"><h3>最近一次检查结果</h3><span class="sub mono">2026-11-21 17:35:12 · 触发方式：定时调度（P1 前置）</span><div class="right"><span class="chip ok"><span class="d"></span>达标 · 耗时 41s</span></div></div>
+          <div id="q-items">
+            <div class="q-item"><div class="q-ico pass">✓</div><div><div class="t">第①层 · 关键表作业状态</div><div class="s">daily / adj_factor / daily_basic / fina_indicator / trade_cal 当日作业全部 <b style="color:var(--green)">SUCCESS</b>，无 FAILED、无缺失</div></div></div>
+            <div class="q-item"><div class="q-ico pass">✓</div><div><div class="t">第②层 · 行数一致性（daily vs stock_basic）</div><div class="s">daily 20261121 落库 <b class="mono">5,412</b> 行 vs 在市 <b class="mono">5,428</b> 只 · 偏差 0.30%（停牌 16 只），阈值内</div></div></div>
+            <div class="q-item"><div class="q-ico pass">✓</div><div><div class="t">第②层 · 复权因子对齐</div><div class="s">adj_factor 与 daily 同日行数完全一致（5,412 = 5,412）</div></div></div>
+            <div class="q-item"><div class="q-ico pass">✓</div><div><div class="t">第②层 · 字段 sanity 抽样</div><div class="s">close ≤ 0 行数 <b class="mono">0</b> · pe_ttm 空值 412 行（亏损股，属预期）· 抽样 200 行数值无异常</div></div></div>
+            <div class="q-item"><div class="q-ico pass">✓</div><div><div class="t">关键表时效校验</div><div class="s">daily / daily_basic / adj_factor 最新 trade_date = 20261121（今日）；fina_indicator 最新 ann_date 距今 1 天，阈值内</div></div></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card rv d2">
+            <div class="card-h"><h3>检查历史</h3><span class="sub">保留近 30 天</span></div>
+            <div class="scroll-y" style="max-height:300px">
+              <table class="tbl">
+                <thead><tr><th>时间</th><th>触发</th><th>结果</th><th>不达标项</th></tr></thead>
+                <tbody>
+                  <tr><td class="num dim">11-21 17:35</td><td>P1 调度</td><td><span class="chip ok"><span class="d"></span>达标</span></td><td class="dim">—</td></tr>
+                  <tr><td class="num dim">11-21 17:20</td><td>手动</td><td><span class="chip ok"><span class="d"></span>达标</span></td><td class="dim">—</td></tr>
+                  <tr><td class="num dim">11-20 17:36</td><td>P1 调度</td><td><span class="chip ok"><span class="d"></span>达标</span></td><td class="dim">—</td></tr>
+                  <tr><td class="num dim">11-19 17:35</td><td>P1 调度</td><td><span class="chip err"><span class="d"></span>不达标</span></td><td style="color:var(--red)">daily 20261119 行数偏差 4.2%（截断）→ 退避重拉后 17:52 复检达标</td></tr>
+                  <tr><td class="num dim">11-18 17:35</td><td>P1 调度</td><td><span class="chip warn"><span class="d"></span>带告警达标</span></td><td style="color:var(--amber)">close≤0 抽样发现 2 行脏数据（已隔离）</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card rv d3">
+            <div class="card-h"><h3>不达标时的行为</h3><span class="sub">与流水线的联动语义</span></div>
+            <div class="card-b" style="font-size:12.5px;color:var(--tx-2);line-height:2">
+              <div><span class="chip err"><span class="d"></span>不达标</span> → 整线 <b class="mono" style="color:var(--tx)">RETRY_WAIT</b>，30 分钟后自动重检</div>
+              <div><span class="chip warn"><span class="d"></span>重试至 22:00</span> → 仍不达标则挂起并推送告警（Server酱）</div>
+              <div><span class="chip ok"><span class="d"></span>非交易日</span> → 空结果按「跳过」处理，不误报为失败</div>
+              <div style="padding-top:8px;border-top:1px dashed var(--line);margin-top:6px">检查项与阈值可在 <b style="color:var(--tx)">quality.yml</b> 调整；此处修改留痕 sys_config</div>
+            </div>
+          </div>
+        </div>
+        </div><!-- /jpane-quality -->
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ================= 抽屉：表详情（自数据总览行唤起） ================= -->
+<div class="dmask" id="dmask" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-h">
+    <div>
+      <h3 style="font-size:16px;font-weight:600"><code class="mono" id="dw-name" style="font-size:16px">daily</code> <span style="font-weight:400;color:var(--tx-2);font-size:13px" id="dw-desc">日线行情</span></h3>
+      <div style="font-size:12px;color:var(--tx-3);margin-top:3px">主键 <code class="k mono" id="dw-pk">(ts_code, trade_date)</code> · <span id="dw-strat">按交易日</span></div>
+    </div>
+    <span class="chip ok" id="dw-chip" style="margin-left:8px"><span class="d"></span>健康</span>
+    <span style="margin-left:auto;cursor:pointer;color:var(--tx-3);font-size:18px;padding:2px 6px;border-radius:6px" onclick="closeDrawer()">✕</span>
+  </div>
+  <div class="drawer-b">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <label class="sw on" onclick="swToggle(this,'每日增量作业')"><span class="tr"></span><span class="tx">每日增量已启用</span></label>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="toast('ok',document.getElementById('dw-name').textContent+' 增量更新已提交，作业进入队列')">⟳ 增量更新</button>
+      <button class="btn pri" onclick="dlgShow('dlg-backfill')">⤓ 全量回填</button>
+    </div>
+    <div class="kv" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">
+      <div class="it"><div class="k">总行数</div><div class="v">12,847,391</div></div>
+      <div class="it"><div class="k">最新业务日期</div><div class="v">20261121</div></div>
+      <div class="it"><div class="k">距今</div><div class="v" style="color:var(--green)">0 个交易日</div></div>
+      <div class="it"><div class="k">官方限流（只读）</div><div class="v">500 次/分钟</div></div>
+      <div class="it"><div class="k">单位口径</div><div class="v">vol=手 amount=千元</div></div>
+      <div class="it"><div class="k">上次全量回填</div><div class="v">2026-10-02</div></div>
+    </div>
+    <div class="card mb14">
+      <div class="card-h">
+        <h3>数据预览</h3>
+        <div class="right">
+          <div class="seg" style="width:150px">
+            <button class="on" onclick="pvCols(this,false)">关键列</button>
+            <button onclick="pvCols(this,true)">全部列</button>
+          </div>
+        </div>
+      </div>
+      <div class="card-b" style="padding-bottom:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input class="inp" style="width:150px" placeholder="ts_code，如 000001.SZ" id="pv-code">
+        <input class="inp" style="width:120px" placeholder="开始日期" onfocus="this.type='date'" onblur="if(!this.value)this.type='text'">
+        <span style="color:var(--tx-3);font-size:12px">至</span>
+        <input class="inp" style="width:120px" placeholder="结束日期" onfocus="this.type='date'" onblur="if(!this.value)this.type='text'">
+        <button class="btn sm pri" onclick="toast('info','查询完成：命中 6 行（模拟）')">查询</button>
+        <button class="btn sm" onclick="toast('info','已导出 CSV（模拟）')">导出</button>
+      </div>
+      <div class="scroll-y" style="max-height:300px">
+        <table class="tbl">
+          <thead><tr id="pv-head"></tr></thead>
+          <tbody id="pv-body"></tbody>
+        </table>
+      </div>
+      <div class="pgn">
+        <span>共 <b class="mono">12,847,391</b> 行</span>
+        <button onclick="toast('info','模拟分页：上一页')">‹</button>
+        <button class="cur">1</button><button onclick="toast('info','模拟分页')">2</button><button onclick="toast('info','模拟分页')">3</button>
+        <button onclick="toast('info','模拟分页：下一页')">›</button>
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-h"><h3>近 10 日落库行数</h3><span class="sub">vs 在市股票数</span></div>
+        <div class="card-b">
+          <div class="spark" id="daily-spark" style="height:64px"></div>
+          <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--tx-3);font-family:var(--mono);margin-top:6px">
+            <span>1110</span><span>1112</span><span>1113</span><span>1114</span><span>1117</span><span>1118</span><span>1119</span><span>1120</span><span>1121</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--tx-2);margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">
+            <span class="dot ok" style="margin-right:5px"></span>行数与 stock_basic 在市数偏差 &lt; 0.5%，无截断迹象
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>该表作业历史</h3><div class="right"><button class="btn sm txt" onclick="closeDrawer();go('jobs')">全部 →</button></div></div>
+        <div class="tl" style="padding:14px 18px 10px 24px">
+          <div class="tl-item ok"><span class="t">11-21 17:42</span>增量 20261121 · <b class="mono" style="color:var(--green)">5,412 行</b> · 8.2s</div>
+          <div class="tl-item ok"><span class="t">11-20 17:41</span>增量 20261120 · <b class="mono">5,398 行</b> · 7.9s</div>
+          <div class="tl-item ok"><span class="t">11-19 17:40</span>增量 20261119 · <b class="mono">5,421 行</b> · 8.4s</div>
+          <div class="tl-item err"><span class="t">11-18 17:39</span>增量 20261118 · <b style="color:var(--red)">失败</b> · 已重试成功</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ================= 弹窗：全量回填（表详情抽屉内唤起） ================= -->
+<div class="mask" id="dlg-backfill">
+  <div class="modal">
+    <div class="modal-h"><h3>全量回填 · <code class="mono" id="dlg-bf-name">daily</code></h3><span class="x" onclick="dlgHide('dlg-backfill')">✕</span></div>
+    <div class="modal-b">
+      <div class="field">
+        <label>回填范围</label>
+        <div class="seg"><button class="on" onclick="segPick(this)">全部历史（19901219 起）</button><button onclick="segPick(this)">指定日期范围</button></div>
+      </div>
+      <div class="grid-2" style="gap:10px">
+        <div class="field"><label>开始日期</label><input class="inp" placeholder="19901219" value="19901219"></div>
+        <div class="field"><label>结束日期</label><input class="inp" placeholder="20261121" value="20261121"></div>
+      </div>
+      <div class="field">
+        <label>执行方式</label>
+        <select class="sel"><option>立即执行（阻塞式，预计 35~60 分钟）</option><option>加入今晚回填队列（推荐，与其他表分晚执行）</option></select>
+        <div class="hint">按限流 400 次/分钟估算：约 8,600 个交易日 × 2 页 ≈ 17,200 次调用 ≈ 43 分钟</div>
+      </div>
+      <div style="background:var(--amber-bg);border:1px solid #f5dfc0;border-radius:8px;padding:10px 14px;font-size:12.5px;color:#92600a">
+        ⚠ 回填采用 upsert 幂等写入，重跑不产生重复数据；回填期间该表每日增量作业自动跳过，完成后恢复。未完成回填前，流水线 S0 数据门会正常拦截该表。
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn" onclick="dlgHide('dlg-backfill')">取消</button>
+      <button class="btn pri" onclick="dlgHide('dlg-backfill');toast('ok','全量回填已提交：'+document.getElementById('dlg-bf-name').textContent+' 19901219 → 20261121，RUN 已创建，可在「接入作业」查看进度')">确认回填</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：初始回填向导 ================= -->
+<div class="mask" id="dlg-backfill-wizard">
+  <div class="modal" style="width:660px">
+    <div class="modal-h"><h3>初始回填向导</h3><span class="sub" style="margin-left:10px;font-size:12px;color:var(--tx-3)">全量总预算约 3~5 小时，建议分晚执行</span><span class="x" onclick="dlgHide('dlg-backfill-wizard')">✕</span></div>
+    <div class="modal-b">
+      <div class="field">
+        <label>回填方案</label>
+        <div class="seg"><button class="on" onclick="segPick(this)">标准方案（M1 必需 10 表优先）</button><button onclick="segPick(this)">全部 41 表</button><button onclick="segPick(this)">自选表</button></div>
+        <div class="hint">标准方案：stock_basic、trade_cal、daily、adj_factor、daily_basic、index_basic、index_daily、fina_indicator、margin、margin_detail · 其余表按默认排期随后</div>
+      </div>
+      <div class="grid-2" style="gap:10px">
+        <div class="field"><label>历史起点</label><input class="inp" value="19901219" ><div class="hint">财务类 per-stock 表固定 19901219 起</div></div>
+        <div class="field"><label>分晚安排</label><select class="sel"><option>第 1 晚：维表 + 行情（约 2h）</option><option>第 2 晚：财务类（约 1.5h）</option><option>第 3 晚：事件类（约 1h）</option></select></div>
+      </div>
+      <div style="background:var(--blue-bg);border:1px solid #c8dbfb;border-radius:8px;padding:10px 14px;font-size:12.5px;color:var(--blue-d)">
+        ⓘ 回填完成 index_daily 后需进行单位实测核对并回写手册第 7 章（M1 验收项）。逐表进度记录于 ingest_log，可在「接入作业」页实时查看。
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn" onclick="dlgHide('dlg-backfill-wizard')">取消</button>
+      <button class="btn pri" onclick="dlgHide('dlg-backfill-wizard');toast('ok','回填计划已创建：今晚 22:00 自动开始第 1 晚（维表+行情），完成后推送通知')">创建回填计划</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 弹窗：通用确认 ================= -->
+<div class="mask" id="dlg-confirm">
+  <div class="modal" style="width:400px">
+    <div class="modal-h"><h3 id="cf-title">确认</h3><span class="x" onclick="dlgHide('dlg-confirm')">✕</span></div>
+    <div class="modal-b" id="cf-body" style="font-size:13px;color:var(--tx-2)"></div>
+    <div class="modal-f">
+      <button class="btn" onclick="dlgHide('dlg-confirm')">取消</button>
+      <button class="btn danger" id="cf-ok">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* ================= 数据 ================= */
+const TABLES=[
+ // name, api, grp, strategy, rows, latest, lagDays, lastRun, status(ok/lag/err/none), enabled
+ ['stock_basic','stock_basic','维表','一次性全量','5,428','20261121',0,'11-21 17:40','ok',1],
+ ['trade_cal','trade_cal','维表','一次性区间','13,182','20261231',0,'11-21 17:40','ok',1],
+ ['stock_namechange','namechange','维表','区间增量','8,914','20261118',2,'11-21 17:40','ok',1],
+ ['index_basic','index_basic','维表','一次性全量','11,206','20261121',0,'11-21 17:40','ok',1],
+ ['sw_industry','index_classify','维表','全量替换','3,672','20261121',0,'11-21 17:40','ok',1],
+ ['sw_industry_member','index_member_all','维表','全量分页','12,041','20261121',0,'11-21 17:40','ok',1],
+ ['daily','daily','行情','按交易日','12,847,391','20261121',0,'11-21 17:42','ok',1],
+ ['adj_factor','adj_factor','行情','按交易日','12,844,102','20261121',0,'11-21 17:42','ok',1],
+ ['daily_basic','daily_basic','行情','按交易日','12,401,552','20261121',0,'11-21 17:41','ok',1],
+ ['stock_moneyflow','moneyflow','行情','按交易日','11,982,347','20261121',0,'11-21 17:41','ok',1],
+ ['stock_stk_limit','stk_limit','行情','按月窗口','9,338,210','20261121',0,'11-21 17:41','ok',1],
+ ['stock_weekly_quote','stk_weekly_monthly','行情','按月窗口','2,558,041','20261120',1,'11-21 17:41','ok',1],
+ ['stock_monthly_quote','stk_weekly_monthly','行情','按月窗口','591,220','20261030',0,'11-21 17:41','ok',1],
+ ['index_daily','index_daily','行情','per-index','1,204,553','20261121',0,'11-21 17:41','ok',1],
+ ['hk_hold','hk_hold','行情','按交易日','8,112,046','20260612','—','06-13 已停用','idle',0],
+ ['dividend','dividend','财务','per-stock','204,553','20261120',1,'11-21 17:42','ok',1],
+ ['fina_indicator','fina_indicator','财务','per-stock','488,221','20261120',1,'11-21 17:41','ok',1],
+ ['income','income','财务','per-stock','512,004','20261031',0,'11-21 17:42','ok',1],
+ ['balancesheet','balancesheet','财务','per-stock','509,887','20261031',0,'11-21 17:42','ok',1],
+ ['cashflow','cashflow','财务','per-stock','508,112','20261031',0,'11-21 17:42','ok',1],
+ ['forecast','forecast','财务','per-stock/公告日','41,220','20261119',2,'11-21 17:42','ok',1],
+ ['express','express','财务','per-stock/公告日','12,884','20261115',4,'11-21 17:42','lag',1],
+ ['fina_audit','fina_audit','财务','per-stock','38,411','20260430',0,'11-21 17:42','ok',1],
+ ['fina_mainbz','fina_mainbz','财务','per-stock×period','988,341','20260930',0,'11-21 17:42','warn',1],
+ ['disclosure_date','disclosure_date','财务','按报告期','21,672','20261231',0,'11-21 17:42','ok',1],
+ ['top_list','top_list','事件','按交易日','388,412','20261121',0,'11-21 17:43','ok',1],
+ ['top_inst','top_inst','事件','按交易日','1,102,441','20261121',0,'11-21 17:43','ok',1],
+ ['block_trade','block_trade','事件','按交易日','622,118','20261121',0,'11-21 17:43','ok',1],
+ ['stock_suspend_d','suspend_d','事件','按月+降级','702,331','20261121',0,'11-21 17:43','ok',1],
+ ['share_float','share_float','事件','按月/公告日','188,422','20261121',0,'11-21 17:43','ok',1],
+ ['pledge_stat','pledge_stat','事件','按周五','428,011','20261120',1,'11-21 17:43','ok',1],
+ ['pledge_detail','pledge_detail','事件','per-stock','1,204,882','20261114',5,'11-16 周度','lag',1],
+ ['repurchase','repurchase','事件','按月/区间','98,441','20261121',0,'11-21 17:43','ok',1],
+ ['top10_holders','top10_holders','事件','per-stock 整期','2,881,204','20260930',0,'11-21 17:43','ok',1],
+ ['top10_floatholders','top10_floatholders','事件','per-stock 整期','2,622,884','20260930',0,'11-21 17:43','ok',1],
+ ['stk_holdertrade','stk_holdertrade','事件','per-stock','312,881','20261120',1,'11-21 17:43','ok',1],
+ ['stk_holdernumber','stk_holdernumber','事件','per-stock 周度','388,112','20261114',5,'11-20 周度','lag',1],
+ ['report_rc','report_rc','事件','区间近90天','31,208','20261118',2,'11-21 17:39','err',1],
+ ['index_weight','index_weight','指数与市场','per-index 区间','3,388,221','20261121',0,'11-21 17:44','ok',1],
+ ['margin','margin','指数与市场','按交易日','16,882','20261121',0,'11-21 17:44','ok',1],
+ ['margin_detail','margin_detail','指数与市场','按交易日','11,204,338','20261121',0,'11-21 17:44','ok',1],
+];
+const STRAT={ok:'ok',lag:'warn',err:'err',warn:'warn',idle:'idle',none:'idle'};
+const STTX={ok:['ok','健康'],lag:['warn','滞后'],err:['err','失败'],warn:['warn','部分成功'],idle:['idle','停用'],none:['idle','未回填']};
+
+/* ================= 总览渲染 ================= */
+let curGrp='all',curKw='';
+function statusCell(st){const c=STTX[st];return `<span class="chip ${c[0]}"><span class="d"></span>${c[1]}</span>`}
+function renderOV(){
+  const tb=document.getElementById('ov-body');
+  const groups=['维表','行情','财务','事件','指数与市场'];
+  let html='';
+  groups.forEach(g=>{
+    const rows=TABLES.filter(t=>t[2]===g&&(curGrp==='all'||curGrp===g)&&(!curKw||t[0].includes(curKw)||t[1].includes(curKw)));
+    if(!rows.length)return;
+    html+=`<tr><td colspan="10" style="background:#fafbfc;font-weight:600;font-size:12px;color:var(--tx-2);padding:7px 14px">${g} <span class="mono" style="font-weight:400">${rows.length} 表</span></td></tr>`;
+    rows.forEach(t=>{
+      const st=STTX[t[8]];
+      html+=`<tr onclick="openDrawer('${t[0]}')" style="cursor:pointer">
+        <td><span class="dot ${t[8]==='ok'?'ok':t[8]==='lag'||t[8]==='warn'?'warn':t[8]==='err'?'err':'idle'}"></span></td>
+        <td><b class="mono" style="font-size:12.5px">${t[0]}</b></td>
+        <td class="mono dim" style="font-size:11.5px">${t[1]}</td>
+        <td class="dim" style="font-size:12px">${t[3]}</td>
+        <td class="num" style="text-align:right">${t[4]}</td>
+        <td class="mono dim" style="font-size:12px">${t[5]}</td>
+        <td style="text-align:center">${t[6]==='—'?'<span class="dim">—</span>':`<span class="mono" style="font-size:12px;color:${t[6]<=1?'var(--green)':t[6]<=3?'var(--amber)':'var(--red)'}">${t[6]} 天</span>`}</td>
+        <td class="num dim" style="font-size:12px">${t[7]}</td>
+        <td onclick="event.stopPropagation()"><label class="sw ${t[9]?'on':''}" onclick="swToggle(this,'${t[0]} 每日增量')"><span class="tr"></span></label></td>
+        <td><div class="ops" onclick="event.stopPropagation()"><button class="btn sm" onclick="event.stopPropagation();toast('ok','${t[0]} 增量更新已入队')">增量</button><button class="btn sm txt" onclick="event.stopPropagation();openDrawer('${t[0]}')">详情</button></div></td>
+      </tr>`;
+    });
+  });
+  if(!html)html=`<tr><td colspan="10"><div class="empty"><div class="big">⌕</div>没有匹配的数据表</div></td></tr>`;
+  tb.innerHTML=html;
+}
+function fltGrp(el){document.querySelectorAll('.f-chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');curGrp=el.dataset.g;renderOV()}
+function fltKw(v){curKw=v.trim();renderOV()}
+renderOV();
+
+/* ================= 表详情：预览 ================= */
+const PV_KEY=['ts_code','trade_date','open','high','low','close','pre_close','pct_chg','vol(手)','amount(千元)'];
+const PV_ALL=PV_KEY.concat(['change','adj_placeholder']);
+const PV_ROWS=[
+ ['000001.SZ','20261121',11.42,11.58,11.35,11.51,11.38,1.14,1,284,51204,822],
+ ['000002.SZ','20261121',8.12,8.20,8.05,8.16,8.09,0.86,844,120,41882,651],
+ ['600000.SH','20261121',7.88,7.95,7.81,7.92,7.85,0.89,1,102,52204,418],
+ ['600519.SH','20261121',1482.00,1495.00,1476.00,1488.00,1478.00,0.68,182,40,29184,27611],
+ ['300750.SZ','20261121',258.40,262.10,256.00,261.35,257.20,1.61,1,482,66120,17208],
+ ['601318.SH','20261121',54.20,54.85,54.05,54.66,54.10,1.04,1,542,88104,4118],
+];
+function pvCols(btn,all){
+  btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on');
+  const cols=all?PV_ALL:PV_KEY;
+  document.getElementById('pv-head').innerHTML=cols.map(c=>`<th class="num">${c}</th>`).join('');
+  document.getElementById('pv-body').innerHTML=PV_ROWS.map(r=>`<tr>${cols.map(c=>{
+    const i=PV_ALL.indexOf(c);const v=i<8?r[i]:(all?'—':r[i]);
+    return `<td class="num ${typeof v==='string'&&c==='ts_code'?'':''}" style="${c==='pct_chg'?`color:${v>0?'var(--red)':'var(--green)'};font-weight:600`:''}">${v}</td>`}).join('')}</tr>`).join('');
+}
+pvCols(document.querySelector('#drawer .seg button'),false);
+
+/* 近10日柱图 */
+(function(){
+  const vals=[5388,5396,5402,5410,5392,5418,5405,5398,5412];
+  const max=Math.max(...vals),min=Math.min(...vals)-80;
+  document.getElementById('daily-spark').innerHTML=vals.map(v=>`<i style="height:${8+(v-min)/(max-min)*92}%" title="${v} 行"></i>`).join('');
+})();
+
+/* ================= 导航 ================= */
+const CRUMB={overview:'数据总览',jobs:'接入作业'};
+function go(v){
+  document.querySelectorAll('.nav-item[data-v]').forEach(n=>n.classList.toggle('active',n.dataset.v===v));
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('on'));
+  document.getElementById('v-'+v).classList.add('on');
+  document.getElementById('crumb').innerHTML='数据中心 / <b>'+CRUMB[v]+'</b>';
+  document.querySelector('.content').scrollTop=0;
+}
+document.querySelectorAll('.nav-item[data-v]').forEach(n=>n.onclick=()=>go(n.dataset.v));
+
+/* ================= 抽屉：表详情 ================= */
+function openDrawer(name){
+  const t=TABLES.find(x=>x[0]===name)||TABLES.find(x=>x[0]==='daily');
+  document.getElementById('dw-name').textContent=t[0];
+  document.getElementById('dw-strat').textContent=t[3];
+  document.getElementById('dlg-bf-name').textContent=t[0];
+  const st=STTX[t[8]];
+  const chip=document.getElementById('dw-chip');
+  chip.className='chip '+st[0];
+  chip.innerHTML='<span class="d"></span>'+st[1];
+  document.getElementById('dmask').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+}
+function closeDrawer(){
+  document.getElementById('dmask').classList.remove('show');
+  document.getElementById('drawer').classList.remove('show');
+}
+
+/* ================= 作业页 Tab ================= */
+function jtab(w){
+  document.getElementById('jpane-jobs').style.display=w==='jobs'?'':'none';
+  document.getElementById('jpane-quality').style.display=w==='quality'?'':'none';
+  document.getElementById('jtab-btn-jobs').classList.toggle('on',w==='jobs');
+  document.getElementById('jtab-btn-quality').classList.toggle('on',w==='quality');
+}
+
+/* ================= 开关 ================= */
+function swToggle(el,name){
+  el.classList.toggle('on');
+  const on=el.classList.contains('on');
+  const tx=el.querySelector('.tx');if(tx)tx.textContent=on?'每日增量已启用':'每日增量已停用';
+  toast(on?'ok':'info',`${name} 已${on?'启用':'停用'}${on?'':'，配置留痕 sys_config'}`);
+}
+
+/* ================= 弹窗 / 确认 / Toast ================= */
+function dlgShow(id,api){if(api)document.getElementById('th-api').textContent=api;document.getElementById(id).classList.add('show')}
+function dlgHide(id){document.getElementById(id).classList.remove('show')}
+let cfCb=null;
+function confirmDlg(title,body,cb){document.getElementById('cf-title').textContent=title;document.getElementById('cf-body').textContent=body;cfCb=cb;document.getElementById('dlg-confirm').classList.add('show')}
+document.getElementById('cf-ok').onclick=()=>{dlgHide('dlg-confirm');if(cfCb)cfCb()};
+function segPick(btn){btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('on'));btn.classList.add('on')}
+function toast(type,msg){
+  const t=document.createElement('div');t.className='toast '+type;
+  t.innerHTML=`<span class="ic">${type==='ok'?'✓':type==='err'?'✕':'i'}</span><span>${msg}</span>`;
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),320)},3400);
+}
+
+/* ================= 一键每日增量（模拟） ================= */
+function runDailyPipeline(){
+  toast('ok','每日增量编排已提交：RUN-20261121-002 创建成功，按 维表→行情→财务事件 分层调度');
+  go('jobs');
+  setTimeout(()=>toast('info','维表层 6 表全部完成（42s），行情层开始执行'),1800);
+}
+
+/* ================= 质量门模拟 ================= */
+function runQuality(){
+  const box=document.getElementById('q-items');
+  const steps=[
+    ['wait','第①层 · 关键表作业状态','正在查询当日 ingest_log …'],
+    ['pass','第①层 · 关键表作业状态','daily / adj_factor / daily_basic / fina_indicator / trade_cal 当日作业全部 <b style="color:var(--green)">SUCCESS</b>，无 FAILED、无缺失'],
+    ['pass','第②层 · 行数一致性（daily vs stock_basic）','daily 20261121 落库 <b class="mono">5,412</b> 行 vs 在市 <b class="mono">5,428</b> 只 · 偏差 0.30%（停牌 16 只），阈值内'],
+    ['pass','第②层 · 复权因子对齐','adj_factor 与 daily 同日行数完全一致（5,412 = 5,412）'],
+    ['pass','第②层 · 字段 sanity 抽样','close ≤ 0 行数 <b class="mono">0</b> · 抽样 200 行数值无异常'],
+    ['pass','关键表时效校验','关键表最新业务日期均为今日（20261121），检查完成'],
+  ];
+  box.innerHTML='';let i=0;
+  toast('info','S0 检查已启动，双层判定逐项执行中…');
+  const tick=()=>{
+    if(i>=steps.length){toast('ok','S0 检查完成：达标 · 耗时 3.2s（模拟加速）');return}
+    const s=steps[i++];
+    box.insertAdjacentHTML('beforeend',`<div class="q-item"><div class="q-ico ${s[0]}">${s[0]==='pass'?'✓':s[0]==='fail'?'!':'…'}</div><div><div class="t">${s[1]}</div><div class="s">${s[2]}</div></div></div>`);
+    setTimeout(tick,i===1?900:550);
+  };
+  tick();
+}
+</script>
+</body>
+</html>
