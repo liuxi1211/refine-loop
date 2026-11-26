@@ -1,0 +1,4 @@
+{
+  "description": "测试夹具：非法 JSON（缺右括号）",
+  "rules": [
+    {"id": "broken"

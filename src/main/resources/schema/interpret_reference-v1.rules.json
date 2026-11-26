@@ -1,0 +1,4 @@
+{
+  "description": "interpret_reference v1 的单元特有 L3 规则（参考实现为空集：通用规则由五重校验链覆盖）。新增规则只加实现与 id，不改校验链。",
+  "rules": []
+}

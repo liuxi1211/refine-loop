@@ -46,6 +46,9 @@
         <ta4j.version>0.22.6</ta4j.version>
         <commons-math3.version>3.6.1</commons-math3.version>
 
+        <!-- 判断校验（L3） -->
+        <networknt-json-schema-validator.version>2.0.0</networknt-json-schema-validator.version>
+
         <!-- API 文档 -->
         <springdoc.version>2.8.6</springdoc.version>
 
@@ -136,6 +139,14 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- L3 判断块 JSON Schema 硬校验（能力详案第 3 章 / 架构 §4.2.5）。
+             仅用于 capability.runtime.validation.SchemaValidator；业务 JSON 序列化仍统一 fastjson2。 -->
+        <dependency>
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>${networknt-json-schema-validator.version}</version>
         </dependency>
 
         <!-- LLM：Spring AI ChatClient 抽象 + OpenAI 兼容协议 + Anthropic Messages 协议 -->

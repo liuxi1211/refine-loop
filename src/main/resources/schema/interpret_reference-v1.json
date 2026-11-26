@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "解读单元判断块（v1）：单单元粒度，字段口径见《核心能力体系设计详案》3.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "unit_id",
+    "unit_version",
+    "stock_code",
+    "trade_date",
+    "dimension",
+    "conclusion",
+    "confidence",
+    "facts_used",
+    "logic_tags",
+    "data_gaps"
+  ],
+  "properties": {
+    "unit_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,39}$",
+      "description": "产出单元 id，必须与注册的单元一致"
+    },
+    "unit_version": {
+      "type": "string",
+      "pattern": "^v\\d+(\\.\\d+)?$",
+      "description": "单元版本，判断内容与版本冻结绑定"
+    },
+    "stock_code": {
+      "type": "string",
+      "pattern": "^\\d{6}\\.(SH|SZ|BJ)$"
+    },
+    "trade_date": {
+      "type": "string",
+      "pattern": "^\\d{8}$",
+      "description": "业务日期 yyyyMMdd"
+    },
+    "dimension": {
+      "type": "string",
+      "enum": ["valuation", "fundamental", "business", "collision", "reference"],
+      "description": "解读维度；主判断单元为 collision"
+    },
+    "conclusion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "description": "五档结论：明显偏低/偏低/合理/偏高/明显偏高（其他维度用各自枚举，禁止自由表述）"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["高", "中", "低"]
+    },
+    "facts_used": {
+      "type": "array",
+      "minItems": 1,
+      "description": "逐条引用事实表指标；校验器做「指标名 + 数值 + 单位」三重比对",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["metric", "value", "unit"],
+        "properties": {
+          "metric": {
+            "type": "string",
+            "minLength": 1,
+            "description": "事实载荷中的指标路径（点号分隔）"
+          },
+          "value": {
+            "type": "number",
+            "description": "必须与事实表数值一致（允许相对误差 0.1%）"
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "description": "口径：pct / 倍 / 元 等，必须与事实表一致"
+          }
+        }
+      }
+    },
+    "logic_tags": {
+      "type": "array",
+      "description": "受控词表标签；越界标签触发重试",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "data_gaps": {
+      "type": "array",
+      "description": "数据缺口说明；数据完整时写单元素数组「无」",
+      "items": {
+        "type": "string"
+      }
+    },
+    "triggers": {
+      "type": "array",
+      "description": "重估触发点（可选）：未来可能改变结论的事件",
+      "items": {
+        "type": "object",
+        "required": ["type", "condition"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["watch", "risk"]
+          },
+          "condition": {
+            "type": "string",
+            "minLength": 1
+          },
+          "direction": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

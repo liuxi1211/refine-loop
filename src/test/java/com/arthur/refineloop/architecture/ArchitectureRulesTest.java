@@ -118,6 +118,22 @@ class ArchitectureRulesTest {
             .because("ChatClient 直连点必须收敛在 LlmInvoker/Provider 所在包（T7）");
 
     @ArchTest
+    static final ArchRule 校验链必须是纯函数 = noClasses()
+            .that().resideInAPackage("com.arthur.refineloop.capability.runtime.validation..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.arthur.refineloop.data..", "com.arthur.refineloop.judgment..",
+                    "com.arthur.refineloop.pipeline..", "com.arthur.refineloop.report..")
+            .because("L3 校验必须可单测、可黄金样本回放：不得读库、不得依赖流水线/存档层（架构 §4.2.5）");
+
+    @ArchTest
+    static final ArchRule 解读单元实现必须位于units包 = classes()
+            .that().areAssignableTo("com.arthur.refineloop.capability.runtime.llm.AbstractInterpretUnit")
+            .and().haveSimpleNameNotEndingWith("AbstractInterpretUnit")
+            .should().resideInAPackage("com.arthur.refineloop.capability.units..")
+            .allowEmptyShould(true)
+            .because("完整模板服务具体单元：实现类归 capability.units（runtime 不得内含业务单元，规范 01 §4）");
+
+    @ArchTest
     static final ArchRule 领域包不得依赖web = noClasses()
             .that().resideInAnyPackage("com.arthur.refineloop.ops..", "com.arthur.refineloop.tushare..",
                     "com.arthur.refineloop.user..")

@@ -39,7 +39,9 @@ com.arthur.refineloop
 ├── tushare/    client|ratelimit|quality + ingest/{model,dto,registry,service}
 ├── user/       账号域（model 角色/权限 + service 账号/认证/偏好/自选股 + UserViews）
 ├── web/        GlobalExceptionHandler|HealthController + common/ + ops/ + user/ + auth/（Controller + *Requests）
-├── capability/ 能力单元框架：spi/（契约+FactBundle）| runtime/（UnitRegistry/FactStore/UnitVersionStore）| runtime/llm/（LlmInvoker/双协议 ChatClient/ReportGenerator）| units/（T9 起）
+├── capability/ 能力单元框架：spi/（契约+FactBundle）| runtime/（UnitRegistry/FactStore/UnitVersionStore/TradingDayCalendar）
+│   │           | runtime/llm/（LlmInvoker/双协议 ChatClient/ReportGenerator/AbstractInterpretUnit 完整模板）
+│   │           | runtime/validation/（L3 五重校验链 + validators/ + rule/）| units/（T9 起）
 └── (规划) pipeline/ judgment/ report/ version（无代码不建空目录/不塞 .gitkeep）
 ```
 
