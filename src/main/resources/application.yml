@@ -117,3 +117,8 @@ refine-loop:
 
 # 数据库文件：默认 ./data/refine_loop.db（相对启动目录），可用环境变量 DB_URL 覆盖为绝对路径
 # LLM 接入（T7 任务引入）：DASHSCOPE_API_KEY（环境变量）
+
+# 判断域（T10）：基准指数会被固化进每份判断（能力详案 3.3 契约 7），换基准 = 换归因口径
+judgment:
+  # 基准指数代码（P1 的超额收益基准）；改它不会改动历史判断里已固化的基准
+  benchmark-index-code: ${JUDGMENT_BENCHMARK_INDEX:000300.SH}

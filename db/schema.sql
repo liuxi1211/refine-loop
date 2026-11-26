@@ -124,6 +124,9 @@ CREATE TABLE IF NOT EXISTS daily_basic (
   circ_mv DECIMAL(24,4) NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uk_daily_basic ON daily_basic (trade_date, ts_code);
+-- 按标的回查历史窗口（估值分位单元每日读近 3 年序列）：唯一键是 (trade_date, ts_code)，
+-- 前缀无法支撑「某标的的全部交易日」，缺此索引会退化为全表扫
+CREATE INDEX IF NOT EXISTS idx_daily_basic_ts_code ON daily_basic (ts_code, trade_date);
 
 
 -- stock_moneyflow（api=moneyflow，行情）

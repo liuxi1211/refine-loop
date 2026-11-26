@@ -52,7 +52,7 @@ class ArchitectureRulesTest {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.arthur.refineloop.ops..", "com.arthur.refineloop.tushare..", "com.arthur.refineloop.user..",
                     "com.arthur.refineloop.data..", "com.arthur.refineloop.web..", "com.arthur.refineloop.config..",
-                    "com.arthur.refineloop.capability..")
+                    "com.arthur.refineloop.capability..", "com.arthur.refineloop.judgment..")
             .because("common 是地基：不得依赖任何业务域或装配层（规范 01 §4）");
 
     @ArchTest
@@ -61,8 +61,18 @@ class ArchitectureRulesTest {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "com.arthur.refineloop.ops..", "com.arthur.refineloop.tushare..",
                     "com.arthur.refineloop.user..", "com.arthur.refineloop.web..",
-                    "com.arthur.refineloop.capability..")
+                    "com.arthur.refineloop.capability..", "com.arthur.refineloop.judgment..")
             .because("data 是最底层数据访问，不得反向依赖领域与 web（规范 01 §4）");
+
+    @ArchTest
+    static final ArchRule judgment不得依赖上层领域与框架 = noClasses()
+            .that().resideInAPackage("com.arthur.refineloop.judgment..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.arthur.refineloop.web..", "com.arthur.refineloop.ops..", "com.arthur.refineloop.tushare..",
+                    "com.arthur.refineloop.user..", "com.arthur.refineloop.capability..",
+                    "com.arthur.refineloop.pipeline..", "com.arthur.refineloop.report..",
+                    "com.arthur.refineloop.version..")
+            .because("判断存档只依赖 common/config/data；import 单元类型会把存档器钉死在某个单元版本上（规范 01 §4）");
 
     @ArchTest
     static final ArchRule capability不得依赖上层领域 = noClasses()
@@ -124,6 +134,16 @@ class ArchitectureRulesTest {
                     "com.arthur.refineloop.data..", "com.arthur.refineloop.judgment..",
                     "com.arthur.refineloop.pipeline..", "com.arthur.refineloop.report..")
             .because("L3 校验必须可单测、可黄金样本回放：不得读库、不得依赖流水线/存档层（架构 §4.2.5）");
+
+    @ArchTest
+    static final ArchRule compute单元禁止接触LLM与远端 = noClasses()
+            .that().resideInAPackage("com.arthur.refineloop.capability.units.compute..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                    "com.arthur.refineloop.capability.runtime.llm..",
+                    "com.arthur.refineloop.capability.runtime.validation..",
+                    "com.arthur.refineloop.tushare.client..", "com.arthur.refineloop.tushare.ingest..",
+                    "com.arthur.refineloop.judgment..")
+            .because("compute 单元是纯函数：禁 LLM、禁远端取数、禁判断存档（架构 §4.2.3）");
 
     @ArchTest
     static final ArchRule 解读单元实现必须位于units包 = classes()

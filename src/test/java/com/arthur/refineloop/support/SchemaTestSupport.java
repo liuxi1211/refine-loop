@@ -21,6 +21,8 @@ import com.arthur.refineloop.data.batch.MyBatisBatchExecutor;
 import com.arthur.refineloop.data.handler.AuditMetaObjectHandler;
 import com.arthur.refineloop.data.handler.SqliteLocalDateTimeTypeHandler;
 import com.arthur.refineloop.data.mapper.IngestLogMapper;
+import com.arthur.refineloop.data.mapper.JudgmentMapper;
+import com.arthur.refineloop.data.mapper.JudgmentUnitRefMapper;
 import com.arthur.refineloop.data.mapper.LlmUsageMapper;
 import com.arthur.refineloop.data.mapper.OpsStatsMapper;
 import com.arthur.refineloop.data.mapper.QualityCheckLogMapper;
@@ -29,6 +31,8 @@ import com.arthur.refineloop.data.mapper.RateLimitCounterMapper;
 import com.arthur.refineloop.data.mapper.SysConfigMapper;
 import com.arthur.refineloop.data.mapper.SysUserMapper;
 import com.arthur.refineloop.data.mapper.SysUserSessionMapper;
+import com.arthur.refineloop.data.mapper.DailyBasicMapper;
+import com.arthur.refineloop.data.mapper.SwIndustryMemberMapper;
 import com.arthur.refineloop.data.mapper.TushareLookupMapper;
 import com.arthur.refineloop.data.mapper.TushareTableMapper;
 import com.arthur.refineloop.data.mapper.UnitFactMapper;
@@ -85,7 +89,9 @@ public final class SchemaTestSupport {
             QualityQueryMapper.class, OpsStatsMapper.class,
             SysUserMapper.class, SysUserSessionMapper.class, UserPreferenceMapper.class,
             UserWatchlistMapper.class,
-            UnitFactMapper.class, UnitVersionMapper.class, LlmUsageMapper.class);
+            UnitFactMapper.class, UnitVersionMapper.class, LlmUsageMapper.class,
+            DailyBasicMapper.class, SwIndustryMemberMapper.class,
+            JudgmentMapper.class, JudgmentUnitRefMapper.class);
 
     /** 每个测试库 JdbcTemplate 对应一个 SqlSessionFactory（测试方法间不串库）。 */
     private static final Map<JdbcTemplate, SqlSessionFactory> FACTORIES =

@@ -12,7 +12,7 @@
 - 后端：Java 21 · Spring Boot 3.5 · MyBatis-Plus · SQLite 单文件库（`db/schema.sql` 是表结构唯一事实源，启动期自动建表）
 - 前端：Vue 3 + Vite + TS（`frontend/`，数据中心运维台）
 - 分层：`web → 领域(ops/tushare/user) → data → common`；`capability` 依赖 `data/common/config`；`config` 是装配根
-- 阶段：Phase A 地基（Tushare 接入 + 运维台 + 账号域）已完成；T6 能力单元框架、T7 LLM 双协议基座已落地；`pipeline/judgment/report/version` 尚未落代码
+- 阶段：Phase A 地基（Tushare 接入 + 运维台 + 账号域）已完成；T6 能力单元框架、T7 LLM 双协议基座、T8 完整模板与 L3 校验链、T9 首个 compute 单元（`calc_valuation_percentile`）、T10 判断存档（`judgment` 域）已落地；T11 最小闭环联调待人工确认；`pipeline/report/version` 尚未落代码
 
 ## 2. 十条红线（违反即返工）
 
@@ -41,11 +41,12 @@ com.arthur.refineloop
 ├── web/        GlobalExceptionHandler|HealthController + common/ + ops/ + user/ + auth/（Controller + *Requests）
 ├── capability/ 能力单元框架：spi/（契约+FactBundle）| runtime/（UnitRegistry/FactStore/UnitVersionStore/TradingDayCalendar）
 │   │           | runtime/llm/（LlmInvoker/双协议 ChatClient/ReportGenerator/AbstractInterpretUnit 完整模板）
-│   │           | runtime/validation/（L3 五重校验链 + validators/ + rule/）| units/（T9 起）
-└── (规划) pipeline/ judgment/ report/ version（无代码不建空目录/不塞 .gitkeep）
+│   │           | runtime/validation/（L3 五重校验链 + validators/ + rule/）| units/compute/（T9 起，interpret/ 待 T14）
+├── judgment/   判断域（T10）：model/ + JudgmentArchiveService + IdGenerator/PayloadAssembler/BenchmarkResolver/ReferenceChecker
+└── (规划) pipeline/ report/ version（无代码不建空目录/不塞 .gitkeep）
 ```
 
-依赖方向：`web → 领域(ops/tushare/user) → data → common`；`capability` 只依赖 `common/config(属性)/data`，禁止依赖 `web/ops/tushare/user/pipeline/judgment/report/version`；`units → runtime → spi` 单向，单元之间禁止互调；`common` 不依赖任何人；`web` 不依赖 `data`；`user` 不依赖 `ops`/`tushare`。
+依赖方向：`web → 领域(ops/tushare/user/judgment) → data → common`；`capability` 只依赖 `common/config(属性)/data`，禁止依赖 `web/ops/tushare/user/pipeline/judgment/report/version`；`units → runtime → spi` 单向，单元之间禁止互调；`judgment` 只依赖 `common/config(属性)/data`（判断块用 `Map` 承载，不 import 单元类型）；`common` 不依赖任何人；`web` 不依赖 `data`；`user` 不依赖 `ops`/`tushare`。
 测试包与主代码同构；夹具放 `support/`；集成测试放 `it/`。
 
 ## 4. 命名（新增类必须先在后缀表里找到位置）
@@ -112,7 +113,8 @@ com.arthur.refineloop
 | 能力单元/流水线/判断 Schema | `docs/核心能力体系设计详案.md` |
 | Tushare 契约（40 接口 / 41 表、幂等键、限流、单位） | `docs/Tushare接口对接手册.md` |
 | 页面信息架构与交互 | `docs/前端设计详案.md` |
-| 任务拆分、实施事实与偏差决策 | `docs/开发任务计划.md`、`docs/T2-T5实施报告与偏差记录.md` |
+| 单元 Spec（8 段式，口径/公式/降级矩阵） | `docs/units/{unit_id}/SPEC.md` |
+| 任务拆分、实施事实与偏差决策 | `docs/开发任务计划.md`、`docs/T2-T5实施报告与偏差记录.md`、`docs/T9-T11实施说明与联调记录.md` |
 
 ## 10. 常用命令
 

@@ -34,6 +34,10 @@ public final class DictTypes {
     public static final String QUALITY_RESULT = "qualityResult";
     public static final String CHECK_ITEM_STATUS = "checkItemStatus";
 
+    /* ---------------- 判断域 ---------------- */
+    public static final String JUDGMENT_DIRECTION = "judgmentDirection";
+    public static final String CONFIDENCE_LEVEL = "confidenceLevel";
+
     private DictTypes() {
     }
 }
