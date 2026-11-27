@@ -134,7 +134,7 @@ class T11LiveClosureIT {
         String runId = "T11-LIVE-" + tradeDate;
         BatchFactResult batch = computeUnit.computeBatch(new FactContext(tradeDate, runId),
                 StockPool.of("UNIVERSE", pool));
-        int saved = factStore.saveAll(tradeDate, batch.facts());
+        int saved = factStore.saveAll(runId, tradeDate, batch.facts());
         log.info("[t11-live] tradeDate={} pool={} facts={} saved={}", tradeDate, pool.size(), batch.size(), saved);
         assertThat(saved).isEqualTo(batch.size());
 
@@ -162,7 +162,7 @@ class T11LiveClosureIT {
     /** 单只标的：装配 FactBundle → 解读 → 报告落盘 + 元数据 → 判断存档；返回 1/0 表示是否存档。 */
     private int archiveOne(FactResult fact, String tradeDate, String runId) throws Exception {
         FactBundle bundle = FactBundle.builder(fact.tsCode(), tradeDate, runId)
-                .putAll(factStore.findByTradeDateAndTsCode(tradeDate, fact.tsCode()))
+                .putAll(factStore.findByTradeDateAndTsCode(runId, tradeDate, fact.tsCode()))
                 .seal();
         InterpretResult interpreted = probeUnit.interpret(bundle);
         if (interpreted.degraded()) {
@@ -171,7 +171,7 @@ class T11LiveClosureIT {
         }
         long reportId = writeReport(fact.tsCode(), tradeDate, runId, interpreted);
         JudgmentArchiveResult result = archiveService.archive(new JudgmentArchiveRequest(
-                fact.tsCode(), tradeDate, "P1", reportId, reportRef(tradeDate, fact.tsCode()),
+                fact.tsCode(), tradeDate, "P1", runId, reportId, reportRef(tradeDate, fact.tsCode()),
                 new MethodSnapshot(readMethodVersion(), "growth_trend", List.of(
                         new MethodSnapshot.UnitRef(ValuationFactSchema.UNIT_ID, ValuationFactSchema.VERSION,
                                 fact.payload()),

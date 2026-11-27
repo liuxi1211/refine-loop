@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { describeError } from '../api/http'
 import type { TableMeta } from '../api/types'
+import BackfillWizard from '../components/BackfillWizard.vue'
 import StateBlock from '../components/StateBlock.vue'
 import StatCard from '../components/StatCard.vue'
 import StatusChip from '../components/StatusChip.vue'
@@ -12,6 +13,7 @@ import { useIngestStore } from '../stores/ingest'
 import { useStatsStore } from '../stores/stats'
 import { useTablesStore } from '../stores/tables'
 import { useUiStore } from '../stores/ui'
+import { useAuthStore } from '../stores/auth'
 import {
   formatInt,
   formatLagDays,
@@ -26,6 +28,12 @@ const ingest = useIngestStore()
 const ui = useUiStore()
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
+const wizardOpen = ref(false)
+const canIngest = computed(() => auth.hasPermission('data:ingest'))
+const isUninitialized = computed(
+  () => tables.loaded && tables.list.length > 0 && tables.list.every((item) => !item.rowCount && !item.latestDate)
+)
 
 const summary = computed(() => tables.summary)
 const today = computed(() => stats.today)
@@ -70,15 +78,15 @@ async function triggerDaily() {
   if (!ack) return
   void tables.fetchOverview({ silent: true, background: true })
   void stats.fetchToday({ silent: true, background: true })
-  void router.push('/jobs')
+  void router.push('/data/jobs')
 }
 
 function goJobs() {
-  void router.push('/jobs')
+  void router.push('/data/jobs')
 }
 
 function goQuality() {
-  void router.push({ path: '/jobs', query: { tab: 'quality' } })
+  void router.push({ path: '/data/jobs', query: { tab: 'quality' } })
 }
 
 function openTable(table: string) {
@@ -107,15 +115,22 @@ watch(
       <div>
         <h2>数据总览</h2>
         <div class="desc">
-          {{ totalTables }} 张 Tushare 数据表的健康度与新鲜度一屏总览 · 状态口径：最新业务日期距今 ≤2 个交易日为健康
+          {{ totalTables }} 张 Tushare 数据表的健康度与新鲜度一屏总览 · 口径：无数据=未回填、最近作业失败=失败、停用=停用、最新业务日期距今 &gt;7 天=滞后、其余=健康
         </div>
       </div>
       <div class="right">
-        <button class="btn pri" :disabled="ingest.triggeringDaily" @click="triggerDaily">
+        <button v-if="!isUninitialized && canIngest" class="btn pri" :disabled="ingest.triggeringDaily" @click="triggerDaily">
           <span v-if="ingest.triggeringDaily" class="spinner on-dark" style="margin-right: 2px"></span>▶ 一键每日增量
         </button>
+        <button v-if="isUninitialized && canIngest" class="btn pri" @click="wizardOpen = true">开始初始回填</button>
         <button class="btn" @click="goJobs">作业历史 →</button>
       </div>
+    </div>
+
+    <div v-if="isUninitialized" class="alert info mb14">
+      <b>首次使用：当前没有历史数据。</b>
+      请先配置 Tushare Token，点击「开始初始回填」生成并执行分晚计划；完成后再运行数据质量门。
+      <template v-if="!canIngest"> 当前账号只有查看权限，请联系管理员执行回填。</template>
     </div>
 
     <!-- 表清单接口不可用：整页错误态（不白屏） -->
@@ -150,7 +165,7 @@ watch(
         </StatCard>
         <StatCard label="今日 Tushare 调用" :value="callsValue" :loading="statsLoading" icon="≋">
           <template v-if="today">
-            数据来源 rate_limit_counter 今日汇总 · 最新交易日
+            数据来源 rate_limit_counter 今日汇总 · 当前业务日
             <b class="mono">{{ today.date || '—' }}</b>
           </template>
           <template v-else>—</template>
@@ -273,11 +288,12 @@ watch(
         </div>
         <div class="pgn">
           <span>当前展示 <b class="mono">{{ tables.totalFiltered }}</b> / {{ tables.totalCount }} 张表</span>
-          <span class="meta">状态口径：lagDays ≤2 健康 · &gt;7 滞后 · 最近作业 FAILED 失败 · 无数据未回填</span>
+          <span class="meta">状态口径：最近作业 FAILED 失败 · 停用 停用 · 无数据 未回填 · lagDays &gt;7 滞后 · 其余健康</span>
         </div>
       </div>
     </template>
 
+    <BackfillWizard v-model="wizardOpen" />
     <TableDetailDrawer />
   </section>
 </template>

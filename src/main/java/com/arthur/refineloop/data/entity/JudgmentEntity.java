@@ -42,6 +42,9 @@ public class JudgmentEntity {
     /** 流水线 id（P1 / P1-MANUAL…）。 */
     private String pipelineId;
 
+    /** 产出判断的运行编号；事实与报告按同一 run 追加，不覆盖历史证据。 */
+    private String runId;
+
     /** 关联报告主键（{@code report.id}）；降级判断指向 DEGRADED 占位报告。 */
     private Long reportId;
 

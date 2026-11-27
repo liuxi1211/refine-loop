@@ -46,9 +46,6 @@ async function logout() {
   await router.replace('/login')
 }
 
-function placeholder(name: string) {
-  ui.pushToast('info', `${name}：M1 分析端页面，不在本批次范围（见《前端设计详案》）`)
-}
 </script>
 
 <template>
@@ -57,21 +54,26 @@ function placeholder(name: string) {
       <div class="brand-logo">RL</div>
       <div>
         <div class="brand-name">RefineLoop</div>
-        <div class="brand-sub">数据中心 · 运维台</div>
+        <div class="brand-sub">投研工作台 · 数据中心</div>
       </div>
     </div>
 
-    <div class="nav-group-label">数据接入管理</div>
-    <router-link class="nav-item" active-class="active" to="/overview">
+    <div class="nav-group-label">数据中心</div>
+    <router-link class="nav-item" active-class="active" to="/data/overview">
       <span class="ico">▦</span>数据总览<span class="cnt">{{ tableCount }}</span>
     </router-link>
-    <router-link class="nav-item" active-class="active" to="/jobs">
-      <span class="ico">⟳</span>接入作业
+    <router-link class="nav-item" active-class="active" to="/data/jobs">
+      <span class="ico">⟳</span>接入与回填
       <span v-if="failedCount > 0" class="cnt warn">{{ failedCount }} 失败</span>
     </router-link>
+    <router-link class="nav-item" active-class="active" :to="{ path: '/data/jobs', query: { tab: 'quality' } }">
+      <span class="ico">✓</span>数据质量门
+    </router-link>
 
-    <div class="nav-group-label">分析工作台</div>
-    <div class="nav-item disabled" @click="placeholder('今日简报')"><span class="ico">◈</span>今日简报<span class="cnt">M1</span></div>
+    <div class="nav-group-label">投研工作台</div>
+    <div class="nav-note">分析闭环将在 T18 后接入；当前先把数据准备与判断地基跑通。</div>
+
+    <div class="nav-group-label">账户</div>
     <router-link class="nav-item" active-class="active" to="/profile">
       <span class="ico">◉</span>我的账户
     </router-link>
@@ -89,18 +91,29 @@ function placeholder(name: string) {
         <span class="mono">{{ auth.user?.roleLabel || '—' }}</span>
       </div>
       <div class="row">
-        <span>后端接口 · 8080</span>
+        <span>后端状态</span>
         <span :class="ui.backendState === 'online' ? 'ok' : ui.backendState === 'offline' ? 'off' : ''">
           <span :class="backendDotClass"></span>{{ backendLabel }}
         </span>
       </div>
-      <div class="row"><span>最新交易日</span><span class="mono" style="color: #a9b8c6">{{ tradeDate }}</span></div>
+      <div class="row"><span>当前业务日</span><span class="mono trade-date">{{ tradeDate }}</span></div>
       <button class="logout-btn" @click="logout">退出登录</button>
     </div>
   </aside>
 </template>
 
 <style scoped>
+.nav-note {
+  margin: 0 12px 10px;
+  color: var(--tx-3);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.trade-date {
+  color: var(--tx-3);
+}
+
 .logout-btn {
   width: 100%;
   margin-top: 10px;
@@ -108,7 +121,7 @@ function placeholder(name: string) {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.04);
-  color: #a9b8c6;
+  color: var(--tx-3);
   font-size: 11.5px;
   cursor: pointer;
   transition: 0.15s;

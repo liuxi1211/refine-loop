@@ -23,6 +23,7 @@ import com.arthur.refineloop.data.mapper.UnitVersionMapper;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.util.List;
@@ -42,8 +43,8 @@ public class CapabilityConfig {
     }
 
     @Bean
-    public FactStore factStore(UnitFactMapper unitFactMapper, Clock clock) {
-        return new FactStore(unitFactMapper, clock);
+    public FactStore factStore(UnitFactMapper unitFactMapper, TransactionTemplate transactionTemplate, Clock clock) {
+        return new FactStore(unitFactMapper, transactionTemplate, clock);
     }
 
     @Bean

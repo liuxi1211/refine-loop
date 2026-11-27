@@ -1,5 +1,6 @@
 package com.arthur.refineloop.data.mapper;
 
+import com.arthur.refineloop.data.entity.JudgmentPriceEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -40,4 +41,17 @@ public interface TushareLookupMapper {
     /** 股票名称（stock_basic）；未知代码返回 null（自选股写入时做名称快照）。 */
     @Select("SELECT name FROM stock_basic WHERE ts_code = #{tsCode} LIMIT 1")
     String selectStockName(@Param("tsCode") String tsCode);
+
+    /** 判断起点：个股不复权 close + 当日复权因子；缺任一行即返回 null。 */
+    @Select("SELECT d.close AS close, a.adj_factor AS adjFactor FROM daily d "
+            + "JOIN adj_factor a ON a.ts_code = d.ts_code AND a.trade_date = d.trade_date "
+            + "WHERE d.ts_code = #{tsCode} AND d.trade_date = #{tradeDate} LIMIT 1")
+    JudgmentPriceEntity selectJudgmentStockPrice(@Param("tsCode") String tsCode,
+                                                  @Param("tradeDate") String tradeDate);
+
+    /** 判断起点：基准指数 close；指数不做复权，adjFactor 固定 1。 */
+    @Select("SELECT close, 1 AS adjFactor FROM index_daily "
+            + "WHERE ts_code = #{indexCode} AND trade_date = #{tradeDate} LIMIT 1")
+    JudgmentPriceEntity selectJudgmentIndexPrice(@Param("indexCode") String indexCode,
+                                                  @Param("tradeDate") String tradeDate);
 }

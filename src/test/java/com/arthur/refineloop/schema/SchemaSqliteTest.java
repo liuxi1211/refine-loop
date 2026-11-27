@@ -268,9 +268,9 @@ class SchemaSqliteTest {
 
     @Test
     void judgmentGeneratedColumnEnforcesSingleActiveRow() {
-        String insertSql = "INSERT INTO judgment (judgment_id, trade_date, ts_code, pipeline_id, report_id, "
+        String insertSql = "INSERT INTO judgment (judgment_id, trade_date, ts_code, pipeline_id, run_id, report_id, "
                 + "method_version, direction, horizon_days, expire_at, confidence, payload, created_at) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         insertJudgment(insertSql, "J-20261121-P1-0001", "000001.SZ", 1L);
         assertThatThrownBy(() -> insertJudgment(insertSql, "J-20261121-P1-0002", "000001.SZ", 2L))
                 .as("同 (ts_code, trade_date, pipeline_id) 且 superseded=0 必须唯一冲突")
@@ -299,7 +299,7 @@ class SchemaSqliteTest {
     // ================================================================== helpers
 
     private void insertJudgment(String insertSql, String judgmentId, String tsCode, long reportId) {
-        jdbc.update(insertSql, judgmentId, "20261121", tsCode, "P1", reportId, "M1-v1", "bullish",
+        jdbc.update(insertSql, judgmentId, "20261121", tsCode, "P1", "R-20261121-P1", reportId, "M1-v1", "bullish",
                 20, "2026-12-11", "high", "{\"unit\":\"test\"}", "2026-11-21 10:00:00");
     }
 

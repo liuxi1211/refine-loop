@@ -24,7 +24,7 @@ since: 2026-11-26
 | 类型 | `compute`（仅 L1，无 LLM） |
 | 版本 | `v1.0`（事实 Schema 同步 `v1.0`） |
 | 粒度 | `BATCH`：一次执行处理整个标的池 |
-| 所属流水线 | P1 S1（初筛）与 S3（分析）共用；产出落 `unit_fact`，S3 按 ts_code 装配 FactBundle |
+| 所属流水线 | P1 S1（初筛）与 S3（分析）共用；产出落 `unit_fact`（按 `run_id` 隔离），S3 按**本次 run** + ts_code 装配 FactBundle |
 | 实现 | `capability/units/compute/CalcValuationPercentileUnit` + `EmpiricalPercentile` + `ValuationFactBuilder` + `ValuationIndustryBaseline` |
 
 ## ① 方法论来源
@@ -131,8 +131,10 @@ since: 2026-11-26
 
 ## ⑤ 结构化输出契约
 
-- 事实落 `unit_fact`：`unit_id=calc_valuation_percentile`、`unit_version=v1.0`、`data_status` 列取
-  `COMPLETE/DEGRADED/MISSING`（`payload.data_status` 取 `ok/degraded/missing`，两者单向映射）；
+- 事实落 `unit_fact`：`run_id`（产出该事实的流水线运行）、`unit_id=calc_valuation_percentile`、`unit_version=v1.0`、
+  `schema_version`、`data_status` 列取 `COMPLETE/DEGRADED/MISSING`（`payload.data_status` 取 `ok/degraded/missing`，两者单向映射）、
+  `notes` 列存降级原因（与 `payload.notes` 同源，落库后必须能被 S3 读回）；
+- **幂等键含 `run_id`，只追加不覆盖**：重算产生新行，旧判断通过 `judgment_unit_ref.fact_id` 仍指向它当初消费的那一行；
 - 下游 `facts_used` 只能引用上面的指标路径，且必须携带同口径 `unit`；
 - 本单元不产判断块（`judgment` 由 interpret 单元 + 存档器负责）。
 

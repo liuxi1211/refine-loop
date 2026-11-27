@@ -77,7 +77,24 @@ class UnitRegistryTest {
         assertThat(error.getCode()).isEqualTo(4004);
     }
 
+    @Test
+    @DisplayName("类型与接口不匹配抛 4002（COMPUTE 必须实现 ComputeUnit）")
+    void typeMustMatchInterface() {
+        UnitRegistry registry = new UnitRegistry();
+
+        ApiException error = catchThrowableOfType(
+                () -> registry.register(new FakeComputeAnnotatedAsInterpret()), ApiException.class);
+        assertThat(error).isNotNull();
+        assertThat(error.getCode()).isEqualTo(4002);
+        assertThat(error.getMessage()).contains("INTERPRET");
+    }
+
     static class PlainComputeUnit implements com.arthur.refineloop.capability.spi.CapabilityUnit {
+    }
+
+    /** 注解声明 INTERPRET 却实现 ComputeUnit：注册期即拦，避免流水线期 CCE。 */
+    @CapabilityUnit(id = "misdeclared_unit", version = "v1", type = UnitType.INTERPRET)
+    static class FakeComputeAnnotatedAsInterpret implements ComputeUnit {
     }
 
     @CapabilityUnit(id = "bad_interpret", version = "v1", type = UnitType.INTERPRET, scope = UnitScope.BATCH)

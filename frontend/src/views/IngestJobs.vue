@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BackfillWizard from '../components/BackfillWizard.vue'
 import JobHistoryTable from '../components/JobHistoryTable.vue'
@@ -7,10 +7,13 @@ import OrchestrationCard from '../components/OrchestrationCard.vue'
 import QualityPanel from '../components/QualityPanel.vue'
 import { useIngestStore } from '../stores/ingest'
 import { useTablesStore } from '../stores/tables'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const ingest = useIngestStore()
 const tables = useTablesStore()
+const auth = useAuthStore()
+const canIngest = computed(() => auth.hasPermission('data:ingest'))
 
 type TabKey = 'jobs' | 'quality'
 
@@ -72,14 +75,14 @@ onBeforeUnmount(stopPolling)
   <section>
     <div class="page-h rv">
       <div>
-        <h2>接入作业</h2>
+        <h2>接入与回填</h2>
         <div class="desc">
-          IngestOrchestrator 编排入口 · 依赖分层：维表层 → 行情层 → 财务与事件层 · 每表作业写 ingest_log
+          首次回填、每日增量、失败重试与质量门；计划按依赖分晚，进度从 ingest_log 恢复
         </div>
       </div>
       <div class="right">
-        <button class="btn" @click="wizardOpen = true">⤓ 初始回填向导</button>
-        <button class="btn pri" :disabled="ingest.triggeringDaily" @click="triggerDaily">
+        <button v-if="canIngest" class="btn" @click="wizardOpen = true">⤓ 初始回填向导</button>
+        <button v-if="canIngest" class="btn pri" :disabled="ingest.triggeringDaily" @click="triggerDaily">
           <span v-if="ingest.triggeringDaily" class="spinner on-dark" style="margin-right: 2px"></span>▶ 一键每日增量
         </button>
       </div>

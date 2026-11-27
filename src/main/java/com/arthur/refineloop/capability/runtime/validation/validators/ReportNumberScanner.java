@@ -56,11 +56,17 @@ public class ReportNumberScanner implements JudgmentValidator {
     private static final Pattern LIST_NUMBER = Pattern.compile("(?m)^[ \\t]*\\d{1,2}[.、)][ \\t]+");
     private static final Pattern SECTION_REF = Pattern.compile("第\\d+[章节条步]");
     private static final Pattern FOOTNOTE = Pattern.compile("\\[\\d+]");
+    private static final Pattern SECURITY_CODE = Pattern.compile(
+            "\\b\\d{6}\\.(?:SH|SZ|BJ|SI|CSI|CIS|HI)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MARKET_TERM = Pattern.compile(
+            "(?<![A-Za-z0-9])(?:\\d{4}(?:Q[1-4]|H[12])|Q[1-4]|H[12]|T\\+\\d+|MA\\d+"
+                    + "|(?:近)?\\d+年|\\d+日均线|(?:沪深|上证|中证|深证)\\d+)(?![A-Za-z0-9])",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern NUMBER_TOKEN = Pattern.compile("\\d[\\d,]*(?:\\.\\d+)?");
 
     private static final List<Pattern> MASKS = List.of(
             FENCED_CODE, INLINE_CODE, ISO_DATE, CN_DATE, VERSION, PIPELINE_ID,
-            HEADING_NUMBER, LIST_NUMBER, SECTION_REF, FOOTNOTE);
+            SECURITY_CODE, MARKET_TERM, HEADING_NUMBER, LIST_NUMBER, SECTION_REF, FOOTNOTE);
 
     @Override
     public String name() {

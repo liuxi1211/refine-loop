@@ -166,6 +166,25 @@ class FactsUsageValidatorTest {
                 JudgmentBlocks.context(block, payload, "", JudgmentBlocks.SCHEMA_ID))).isEmpty();
     }
 
+    @Test
+    @DisplayName("按书写精度四舍五入：18.5432→18.5 通过，→18.9 失败")
+    void acceptsLastDigitRoundingButNotTampering() {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put(ReferenceFacts.PE_PERCENTILE, ReferenceFacts.metric(18.5432, "pct"));
+        Map<String, Object> rounded = JudgmentBlocks.base();
+        rounded.put("facts_used", List.of(
+                JudgmentBlocks.reference(ReferenceFacts.PE_PERCENTILE, 18.5, "pct")));
+        Map<String, Object> tampered = JudgmentBlocks.base();
+        tampered.put("facts_used", List.of(
+                JudgmentBlocks.reference(ReferenceFacts.PE_PERCENTILE, 18.9, "pct")));
+
+        assertThat(validator.validate(
+                JudgmentBlocks.context(rounded, payload, "", JudgmentBlocks.SCHEMA_ID))).isEmpty();
+        assertThat(validator.validate(
+                JudgmentBlocks.context(tampered, payload, "", JudgmentBlocks.SCHEMA_ID)))
+                .extracting(ValidationError::rule).contains("value_mismatch");
+    }
+
     private Map<String, Object> blockWithPercentile(double declared) {
         Map<String, Object> block = JudgmentBlocks.base();
         List<Map<String, Object>> used = new ArrayList<>();

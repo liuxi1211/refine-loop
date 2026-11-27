@@ -1054,20 +1054,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_margin_detail ON margin_detail (trade_date,
 --       + 账号域（sys_user/sys_user_session/user_preference/user_watchlist）
 -- ============================================================
 
--- 事实层：能力单元事实（payload JSON）
+-- 事实层：能力单元事实（payload JSON；按 run 追加，不覆盖历史证据）
 CREATE TABLE IF NOT EXISTS unit_fact (
-  -- [原 MySQL 表注释] 事实层-能力单元事实（幂等键 unit_id+unit_version+ts_code+trade_date）
+  -- [原 MySQL 表注释] 事实层-能力单元事实（幂等键 run_id+unit_id+unit_version+ts_code+trade_date）
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id VARCHAR(40) NOT NULL,                -- 产出该事实的 pipeline_run.run_id；重跑不得覆盖旧 run
   unit_id VARCHAR(40) NOT NULL,
   unit_version VARCHAR(20) NOT NULL,
+  schema_version VARCHAR(20) NOT NULL,        -- 事实 payload Schema 版本（与单元版本独立）
   ts_code VARCHAR(12) NOT NULL,
-  trade_date CHAR(8) NOT NULL,
-  payload TEXT NOT NULL,
-  data_status VARCHAR(16) NOT NULL DEFAULT 'COMPLETE',
-  created_at DATETIME NOT NULL DEFAULT (datetime('now','localtime'))
+  trade_date CHAR(8) NOT NULL,                -- 交易日 yyyyMMdd
+  payload TEXT NOT NULL,                     -- 结构化事实 JSON 文本
+  data_status VARCHAR(16) NOT NULL DEFAULT 'COMPLETE', -- 枚举：COMPLETE/DEGRADED/MISSING
+  notes TEXT NOT NULL DEFAULT '[]',          -- 降级/缺失原因 JSON 数组
+  created_at DATETIME NOT NULL DEFAULT (datetime('now','localtime'))  -- 事实计算落库时间
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uk_unit_fact ON unit_fact (unit_id, unit_version, ts_code, trade_date);
-CREATE INDEX IF NOT EXISTS idx_unit_fact_date ON unit_fact (trade_date, ts_code);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_unit_fact ON unit_fact (run_id, unit_id, unit_version, ts_code, trade_date);
+CREATE INDEX IF NOT EXISTS idx_unit_fact_date ON unit_fact (run_id, trade_date, ts_code); -- S3 按本次 run+日期+标的装配 FactBundle
 
 
 -- 判断层：判断存档（active_flag 生成列 + uk_judgment_active 保证同组仅一行 superseded=0）
@@ -1078,6 +1081,7 @@ CREATE TABLE IF NOT EXISTS judgment (
   trade_date CHAR(8) NOT NULL,
   ts_code VARCHAR(12) NOT NULL,
   pipeline_id VARCHAR(8) NOT NULL,
+  run_id VARCHAR(40) NOT NULL, -- 产出判断的 pipeline_run.run_id；事实/报告按同一 run 追加
   report_id BIGINT NOT NULL,
   method_version VARCHAR(20) NOT NULL,
   direction VARCHAR(16) NOT NULL,
@@ -1105,6 +1109,7 @@ CREATE TABLE IF NOT EXISTS judgment_unit_ref (
   judgment_id VARCHAR(40) NOT NULL,
   unit_id VARCHAR(40) NOT NULL,
   unit_version VARCHAR(20) NOT NULL,
+  fact_id BIGINT NULL, -- compute 单元对应的 unit_fact.id；interpret 单元无事实行时为 NULL
   output_summary TEXT NULL,
   created_at DATETIME NOT NULL DEFAULT (datetime('now','localtime'))
 );

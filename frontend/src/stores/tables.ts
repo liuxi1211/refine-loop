@@ -192,14 +192,21 @@ export const useTablesStore = defineStore('tables', () => {
     }
   }
 
-  async function backfillTable(table: string, range: tablesApi.BackfillRange): Promise<boolean> {
+  async function backfillTable(
+    table: string,
+    range: tablesApi.BackfillRange,
+    options: { silent?: boolean } = {}
+  ): Promise<boolean> {
     if (pendingBackfills.value.includes(table)) return false
     const ui = useUiStore()
     pendingBackfills.value.push(table)
     try {
       const ack = await tablesApi.backfillTable(table, range)
       const scope = range.start || range.end ? `${range.start || '起始'} → ${range.end || '最新'}` : '全部历史'
-      ui.pushToast('ok', ack?.message || `${table} 全量回填已提交（${scope}），异步执行中`)
+      // 批量执行（向导逐表发起）时由调用方统一提示，避免一次刷出 N 条 toast
+      if (!options.silent) {
+        ui.pushToast('ok', ack?.message || `${table} 全量回填已提交（${scope}），异步执行中`)
+      }
       return true
     } catch {
       return false

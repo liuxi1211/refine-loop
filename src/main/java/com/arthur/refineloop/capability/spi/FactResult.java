@@ -2,6 +2,8 @@ package com.arthur.refineloop.capability.spi;
 
 import com.arthur.refineloop.common.util.JsonUtils;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,7 +47,8 @@ public record FactResult(
         if (dataStatus == null) {
             throw new IllegalArgumentException("dataStatus 不能为空");
         }
-        payload = payload == null ? Map.of() : Map.copyOf(payload);
+        payload = payload == null ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(payload));
         notes = notes == null ? List.of() : List.copyOf(notes);
     }
 

@@ -48,6 +48,13 @@ public interface TushareTableMapper {
                      @Param("keys") List<String> keys,
                      @Param("keyValues") Map<String, Object> keyValues);
 
+    /** 按业务日期区间删除整块（上游空结果也要清除旧块，防止更正/撤回后旧数据残留）。 */
+    @DeleteProvider(type = TushareSqlProvider.class, method = "deleteByRange")
+    int deleteByRange(@Param("table") String table,
+                      @Param("column") String column,
+                      @Param("start") String start,
+                      @Param("end") String end);
+
     @SelectProvider(type = TushareSqlProvider.class, method = "countAll")
     long countAll(@Param("table") String table);
 

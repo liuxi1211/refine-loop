@@ -200,12 +200,12 @@ class DataQualityGateTest {
     }
 
     @Test
-    void noCalendarAndNoDataIsEmptyNotFail() {
-        // 无 trade_cal 记录且当日无 daily → 按 EMPTY 处理（不误报失败）
+    void noCalendarAndNoDataFailsInsteadOfPretendingEmpty() {
         QualityReport report = gate.check("20261123");
 
-        assertThat(report.result()).isEqualTo(QualityReport.RESULT_EMPTY);
-        assertThat(report.items()).allMatch(item -> QualityCheckItem.SKIP.equals(item.status()));
+        assertThat(report.result()).isEqualTo(QualityReport.RESULT_FAIL);
+        assertThat(item(report, "L0_TRADE_CALENDAR").status()).isEqualTo(QualityCheckItem.FAIL);
+        assertThat(item(report, "L0_TRADE_CALENDAR").message()).contains("请先回填 trade_cal");
     }
 
     // ================================================================ 参数与辅助

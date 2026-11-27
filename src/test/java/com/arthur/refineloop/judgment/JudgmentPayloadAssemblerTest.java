@@ -4,7 +4,9 @@ import com.arthur.refineloop.common.ApiException;
 import com.arthur.refineloop.judgment.model.AssembledJudgment;
 import com.arthur.refineloop.judgment.model.Benchmark;
 import com.arthur.refineloop.judgment.model.JudgmentArchiveRequest;
+import com.arthur.refineloop.judgment.model.MarketSnapshot;
 import com.arthur.refineloop.judgment.support.JudgmentFixtures;
+import com.arthur.refineloop.support.TradingDays;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -29,8 +31,12 @@ class JudgmentPayloadAssemblerTest {
 
     private static final Clock CLOCK =
             Clock.fixed(Instant.parse("2026-11-26T11:00:00Z"), ZoneId.of("Asia/Shanghai"));
+    private static final MarketSnapshot MARKET_SNAPSHOT =
+            new MarketSnapshot(new java.math.BigDecimal("12.40"), new java.math.BigDecimal("1.25"),
+                    new java.math.BigDecimal("3500"));
 
-    private final JudgmentPayloadAssembler assembler = new JudgmentPayloadAssembler();
+    private final JudgmentPayloadAssembler assembler = new JudgmentPayloadAssembler(
+            (tradeDate, tradingDays) -> TradingDays.after(tradeDate, tradingDays));
 
     @Test
     @DisplayName("正常判断：身份/基准/方法/方向/正文逐块齐全，created_at 带时区偏移")
@@ -50,7 +56,7 @@ class JudgmentPayloadAssemblerTest {
                 .containsEntry("created_at", "2026-11-26T19:00:00+08:00");
         assertThat(assembled.direction()).isEqualTo("bullish");
         assertThat(assembled.horizonDays()).isEqualTo(60);
-        assertThat(assembled.expireAt()).isEqualTo("2027-01-25");
+        assertThat(assembled.expireAt()).isEqualTo("2027-02-18");
         assertThat(assembled.confidence()).isEqualTo("中");
 
         @SuppressWarnings("unchecked")
@@ -68,7 +74,7 @@ class JudgmentPayloadAssemblerTest {
         Map<String, Object> direction = (Map<String, Object>) payload.get("direction");
         assertThat(direction).containsEntry("type", "bullish")
                 .containsEntry("horizon_days", 60)
-                .containsEntry("expire_at", "2027-01-25")
+                .containsEntry("expire_at", "2027-02-18")
                 .containsEntry("is_reaffirm", false)
                 .containsEntry("target_note", "预期相对沪深300 获取超额收益");
         assertThat(direction).containsKey("scale");
@@ -100,7 +106,7 @@ class JudgmentPayloadAssemblerTest {
                         false, List.of(), JudgmentFixtures.method(), 7L),
                 context("J-20261126-P1-0001", false));
 
-        assertThat(assembled.expireAt()).isEqualTo("2027-01-25");
+        assertThat(assembled.expireAt()).isEqualTo("2027-02-18");
     }
 
     @Test
@@ -171,7 +177,7 @@ class JudgmentPayloadAssemblerTest {
     void writesEmptyIndustryCodeWhenMissing() {
         AssembledJudgment assembled = assembler.assemble(JudgmentFixtures.request(7L),
                 new JudgmentPayloadAssembler.AssemblyContext("J-20261126-P1-0001", false,
-                        new Benchmark("000300.SH", null), "平安银行", offsetNow()));
+                        new Benchmark("000300.SH", null), "平安银行", MARKET_SNAPSHOT, offsetNow()));
 
         @SuppressWarnings("unchecked")
         Map<String, Object> benchmark = (Map<String, Object>) assembled.payload().get("benchmark");
@@ -266,7 +272,7 @@ class JudgmentPayloadAssemblerTest {
 
     private JudgmentPayloadAssembler.AssemblyContext context(String judgmentId, boolean reaffirm) {
         return new JudgmentPayloadAssembler.AssemblyContext(judgmentId, reaffirm,
-                new Benchmark("000300.SH", "801780.SI"), "平安银行", offsetNow());
+                new Benchmark("000300.SH", "801780.SI"), "平安银行", MARKET_SNAPSHOT, offsetNow());
     }
 
     private OffsetDateTime offsetNow() {

@@ -230,7 +230,10 @@ public class IngestOrchestrator {
                 .max(LocalDateTime::compareTo).orElse(null);
         boolean anyFailed = jobs.stream().anyMatch(j -> "FAILED".equals(j.status()));
         progress.start(startedAt);
-        progress.finish(anyFailed ? "FAILED" : "SUCCESS", finishedAt);
+        boolean incomplete = progress.tables.stream()
+                .anyMatch(table -> "PENDING".equals(table.status) || "RUNNING".equals(table.status));
+        // 缺失表或非终态行都说明上次编排未完整结束，不能把「有日志」当成「全部成功」
+        progress.finish(anyFailed || incomplete ? "FAILED" : "SUCCESS", finishedAt);
         return Optional.of(progress);
     }
 

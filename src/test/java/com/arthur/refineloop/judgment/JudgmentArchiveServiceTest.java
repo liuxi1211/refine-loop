@@ -10,10 +10,12 @@ import com.arthur.refineloop.data.mapper.JudgmentMapper;
 import com.arthur.refineloop.data.mapper.JudgmentUnitRefMapper;
 import com.arthur.refineloop.data.mapper.SwIndustryMemberMapper;
 import com.arthur.refineloop.data.mapper.TushareLookupMapper;
+import com.arthur.refineloop.data.mapper.UnitFactMapper;
 import com.arthur.refineloop.judgment.model.JudgmentArchiveRequest;
 import com.arthur.refineloop.judgment.model.JudgmentArchiveResult;
 import com.arthur.refineloop.judgment.support.JudgmentFixtures;
 import com.arthur.refineloop.support.SchemaTestSupport;
+import com.arthur.refineloop.support.TradingDays;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +58,7 @@ class JudgmentArchiveServiceTest {
         idGenerator = new JudgmentIdGenerator();
         ValuationFixtures.stock(jdbc, JudgmentFixtures.TS_CODE, "平安银行");
         ValuationFixtures.industryMember(jdbc, JudgmentFixtures.TS_CODE, "801780.SI", "20200101", null);
+        seedMarket(jdbc, JudgmentFixtures.TRADE_DATE);
     }
 
     @Test
@@ -76,7 +79,7 @@ class JudgmentArchiveServiceTest {
         assertThat(stored.getMethodVersion()).isEqualTo(JudgmentFixtures.METHOD_VERSION);
         assertThat(stored.getDirection()).isEqualTo("bullish");
         assertThat(stored.getHorizonDays()).isEqualTo(60);
-        assertThat(stored.getExpireAt()).isEqualTo("2027-01-25");
+        assertThat(stored.getExpireAt()).isEqualTo("2027-02-18");
         assertThat(stored.getConfidence()).isEqualTo("中");
         assertThat(stored.getFrozen()).isEqualTo(1);
         assertThat(stored.getSuperseded()).isZero();
@@ -154,6 +157,7 @@ class JudgmentArchiveServiceTest {
     @DisplayName("下一交易日同方向：is_reaffirm=true，且不与前一日的有效判断冲突")
     void marksReaffirmOnLaterTradingDay() {
         service().archive(JudgmentFixtures.request(7L));
+        seedMarket(jdbc, "20261127");
         JudgmentArchiveResult second = service().archive(requestOn("20261127"));
 
         assertThat(second.reaffirm()).isTrue();
@@ -194,6 +198,7 @@ class JudgmentArchiveServiceTest {
     void recordsIndustryGapWhenMembershipMissing() {
         JdbcTemplate empty = SchemaTestSupport.newJdbcTemplate();
         ValuationFixtures.stock(empty, JudgmentFixtures.TS_CODE, "平安银行");
+        seedMarket(empty, JudgmentFixtures.TRADE_DATE);
 
         JudgmentArchiveResult result = service(empty, JudgmentReferenceChecker.none(), idGenerator)
                 .archive(JudgmentFixtures.request(7L));
@@ -213,6 +218,7 @@ class JudgmentArchiveServiceTest {
     void fallsBackToCodeWhenStockNameMissing() {
         JdbcTemplate empty = SchemaTestSupport.newJdbcTemplate();
         ValuationFixtures.industryMember(empty, JudgmentFixtures.TS_CODE, "801780.SI", "20200101", null);
+        seedMarket(empty, JudgmentFixtures.TRADE_DATE);
 
         JudgmentArchiveResult result = service(empty, JudgmentReferenceChecker.none(), idGenerator)
                 .archive(JudgmentFixtures.request(7L));
@@ -278,14 +284,29 @@ class JudgmentArchiveServiceTest {
         return new JudgmentArchiveService(
                 mapperOf(target, JudgmentMapper.class),
                 mapperOf(target, JudgmentUnitRefMapper.class),
-                mapperOf(target, TushareLookupMapper.class),
+                new JudgmentArchiveContextResolver(mapperOf(target, TushareLookupMapper.class),
+                        mapperOf(target, UnitFactMapper.class)),
                 generator,
-                new JudgmentPayloadAssembler(),
+                new JudgmentPayloadAssembler((tradeDate, tradingDays) -> TradingDays.after(tradeDate, tradingDays)),
                 new BenchmarkResolver(mapperOf(target, SwIndustryMemberMapper.class),
                         new JudgmentProperties()),
                 checker,
                 new TransactionTemplate(new DataSourceTransactionManager(target.getDataSource())),
                 CLOCK);
+    }
+
+    /** 判断可验证性所需的行情起点：个股不复权 close + 复权因子 + 基准指数 close。 */
+    private static void seedMarket(JdbcTemplate target, String tradeDate) {
+        target.update("INSERT INTO daily (ts_code, trade_date, close) VALUES (?, ?, 12.4)",
+                JudgmentFixtures.TS_CODE, tradeDate);
+        target.update("INSERT INTO adj_factor (ts_code, trade_date, adj_factor) VALUES (?, ?, 1.25)",
+                JudgmentFixtures.TS_CODE, tradeDate);
+        target.update("INSERT INTO index_daily (ts_code, trade_date, close) VALUES ('000300.SH', ?, 3500)",
+                tradeDate);
+        target.update("INSERT INTO unit_fact (run_id, unit_id, unit_version, schema_version, ts_code, trade_date,"
+                        + " payload, data_status, notes) VALUES (?, ?, 'v1.0', 'schema-v1', ?, ?,"
+                        + " '{\"data_status\":\"ok\"}', 'COMPLETE', '[]')",
+                "RUN-" + tradeDate, JudgmentFixtures.COMPUTE_UNIT, JudgmentFixtures.TS_CODE, tradeDate);
     }
 
     private static <T> T mapperOf(JdbcTemplate target, Class<T> type) {

@@ -11,7 +11,7 @@ import java.time.Clock;
 /**
  * 单元版本登记：启动期把 {@link UnitRegistry} 中的单元同步到 {@code unit_version}。
  *
- * <p>只增不改；已存在行不会被改写状态，仅刷新 prompt_path/params/activated_at，保证重复启动幂等。
+ * <p>只增不改；已存在行不会被改写，仅校正主版本 prompt_path，保证重复启动幂等且不清空人工 params。
  */
 @Slf4j
 public class UnitVersionStore {
@@ -49,6 +49,12 @@ public class UnitVersionStore {
         if (entry.type() != UnitType.INTERPRET) {
             return null;
         }
-        return "prompts/" + entry.unitId() + "/" + entry.version() + ".md";
+        return "prompts/" + entry.unitId() + "/" + majorVersion(entry.version()) + ".md";
+    }
+
+    private String majorVersion(String version) {
+        String withoutPrefix = version.substring(1);
+        int dot = withoutPrefix.indexOf('.');
+        return "v" + (dot < 0 ? withoutPrefix : withoutPrefix.substring(0, dot));
     }
 }

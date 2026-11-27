@@ -226,7 +226,7 @@ public class IngestJobService {
                             e.getMessage());
                 }
             }
-            afterPerStock(def, errors, fetched);
+            afterPerStock(def, errors);
             return;
         }
         Semaphore semaphore = new Semaphore(concurrency);
@@ -255,17 +255,15 @@ public class IngestJobService {
                 future.get();
             }
         }
-        afterPerStock(def, errors, fetched);
+        afterPerStock(def, errors);
     }
 
-    private void afterPerStock(TableDef def, ConcurrentLinkedQueue<Exception> errors, AtomicLong fetched)
-            throws Exception {
+    /** 任何单股失败都代表全表作业不完整，不能因其它股票有数据就标 SUCCESS。 */
+    private void afterPerStock(TableDef def, ConcurrentLinkedQueue<Exception> errors) throws Exception {
         if (!errors.isEmpty()) {
             log.warn("per-stock 作业 {} 有 {} 只股票失败，首条错误: {}", def.tableName(), errors.size(),
                     errors.peek().getMessage());
-            if (fetched.get() == 0) {
-                throw errors.peek();
-            }
+            throw errors.peek();
         }
     }
 
@@ -279,6 +277,8 @@ public class IngestJobService {
         }
         List<Map<String, Object>> rows = fetchAllPages(def, params, fetched);
         if (rows.isEmpty()) {
+            // 上游空结果也要清掉该股票的旧块，否则更正/撤回后旧数据会永久残留
+            writer.deleteBlock(def, Map.of("ts_code", code));
             return;
         }
         if ("keep_latest_ann_date".equals(def.options().get("dedup"))) {
@@ -304,6 +304,9 @@ public class IngestJobService {
                 List<Map<String, Object>> dayRows = fetchAllPages(def, params, fetched);
                 if (!dayRows.isEmpty()) {
                     written.addAndGet(writeRows(def, dayRows));
+                } else {
+                    // 当日龙虎榜等为空时必须清除旧块，不能把「上游已清空」误当「无需更新」
+                    writer.deleteBlock(def, Map.of("trade_date", tradeDate));
                 }
             } else {
                 forEachPage(def, params, fetched, page -> written.addAndGet(writer.writeUpsert(def, page)));
@@ -335,6 +338,9 @@ public class IngestJobService {
                 List<Map<String, Object>> monthRows = fetchAllPages(def, params, fetched);
                 if (!monthRows.isEmpty()) {
                     written.addAndGet(writeRows(def, monthRows));
+                } else {
+                    // 回购等按公告日整块回补：空月也要清除旧块，避免上游更正后旧公告残留
+                    writer.deleteByDateRange(def, def.latestDateColumn(), monthStart, monthEnd);
                 }
             } else {
                 forEachPage(def, params, fetched, page -> written.addAndGet(writer.writeUpsert(def, page)));
@@ -405,6 +411,8 @@ public class IngestJobService {
                 List<Map<String, Object>> rows = fetchAllPages(def, params, fetched);
                 if (!rows.isEmpty()) {
                     written.addAndGet(writeRows(def, rows));
+                } else {
+                    writer.deleteByDateRange(def, "report_date", rangeStart, end);
                 }
             }
             case "index_weight" -> {
@@ -455,7 +463,8 @@ public class IngestJobService {
                 keyValues.add(value);
             }
             if (missing) {
-                continue;
+                throw new IllegalArgumentException("整块删插行缺少幂等键，拒绝静默丢行：table="
+                        + def.tableName() + " keys=" + keys + " row=" + row);
             }
             groups.computeIfAbsent(keyValues, k -> new ArrayList<>()).add(row);
         }

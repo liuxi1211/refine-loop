@@ -12,7 +12,7 @@
 - 后端：Java 21 · Spring Boot 3.5 · MyBatis-Plus · SQLite 单文件库（`db/schema.sql` 是表结构唯一事实源，启动期自动建表）
 - 前端：Vue 3 + Vite + TS（`frontend/`，数据中心运维台）
 - 分层：`web → 领域(ops/tushare/user) → data → common`；`capability` 依赖 `data/common/config`；`config` 是装配根
-- 阶段：Phase A 地基（Tushare 接入 + 运维台 + 账号域）已完成；T6 能力单元框架、T7 LLM 双协议基座、T8 完整模板与 L3 校验链、T9 首个 compute 单元（`calc_valuation_percentile`）、T10 判断存档（`judgment` 域）已落地；T11 最小闭环联调待人工确认；`pipeline/report/version` 尚未落代码
+- 阶段：Phase A 地基（Tushare 接入 + 运维台 + 账号域）已完成；T6 能力单元框架、T7 LLM 双协议基座、T8 完整模板与 L3 校验链、T9 首个 compute 单元（`calc_valuation_percentile`）、T10 判断存档（`judgment` 域）已落地；**2026-11-26 完成「T12 前设计复查」并把判断/事实契约升级到可验证口径**（有效期统一交易日、行情起点快照、规则 ID、事实按 run 隔离，见 `docs/T12前设计复查与改造记录.md`）；T11 最小闭环联调仍待人工确认；`pipeline/report/version` 尚未落代码
 
 ## 2. 十条红线（违反即返工）
 
@@ -43,6 +43,7 @@ com.arthur.refineloop
 │   │           | runtime/llm/（LlmInvoker/双协议 ChatClient/ReportGenerator/AbstractInterpretUnit 完整模板）
 │   │           | runtime/validation/（L3 五重校验链 + validators/ + rule/）| units/compute/（T9 起，interpret/ 待 T14）
 ├── judgment/   判断域（T10）：model/ + JudgmentArchiveService + IdGenerator/PayloadAssembler/BenchmarkResolver/ReferenceChecker
+│               + ExpiryRule/ExpiryCalculator（交易日到期）+ ArchiveContextResolver（行情起点快照 + 事实行定位）
 └── (规划) pipeline/ report/ version（无代码不建空目录/不塞 .gitkeep）
 ```
 

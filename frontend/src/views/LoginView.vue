@@ -21,7 +21,7 @@ async function submit() {
   }
   try {
     await auth.login(username.value.trim(), password.value)
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/overview'
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/data/overview'
     await router.replace(redirect)
   } catch (error) {
     errorText.value = describeError(auth.error) || describeError(error as Error) || '登录失败'
@@ -36,7 +36,7 @@ async function submit() {
         <div class="brand-logo">RL</div>
         <div>
           <div class="brand-name">RefineLoop</div>
-          <div class="brand-sub">股票分析与验证闭环 · 数据中心</div>
+          <div class="brand-sub">股票分析与验证闭环 · 投研工作台</div>
         </div>
       </div>
 
@@ -65,7 +65,7 @@ async function submit() {
       </form>
 
       <div class="login-foot">
-        首次启动默认账号 <code class="k">admin / admin123</code>，登录后请立即在「我的账户」修改密码。
+        首次使用请联系管理员获取初始化账号；生产环境应通过环境变量设置初始密码，登录后立即修改。
       </div>
     </div>
   </div>

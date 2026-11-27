@@ -31,8 +31,8 @@ import java.util.Set;
  * adj_factor 与 daily 同日行数一致；daily.close &lt;= 0 行数告警；
  * daily 最新 trade_date == 检查日；fina_indicator 最新 ann_date 距检查日 ≤ N 天（超限 WARN）。
  *
- * <p>结果区分：非交易日（trade_cal is_open='0'，或无日历记录且当日无 daily）→ 整体 {@code EMPTY}、
- * 逐项 {@code SKIP}，不算失败；交易日但无数据 → {@code FAIL}。结果落 {@code quality_check_log}。
+ * <p>结果区分：非交易日（trade_cal is_open='0'）→ 整体 {@code EMPTY}、逐项 {@code SKIP}，不算失败；
+ * 日历缺失/非法 → {@code FAIL}（空库不能被推断为非交易日）；交易日但无数据 → {@code FAIL}。结果落 {@code quality_check_log}。
  *
  * <p>SQL 只使用固定表名/列名（daily/adj_factor/trade_cal/stock_basic/fina_indicator/ingest_log），
  * 全部收敛在 {@link QualityQueryMapper}（固定表查询）与 {@link IngestLogMapper}（作业日志）里，
@@ -54,6 +54,7 @@ public class DataQualityGate {
 
     /** 第①层检查项 code 前缀（后接表名）。 */
     private static final String CODE_JOB_PREFIX = "L1_CRITICAL_JOB_";
+    private static final String CODE_CALENDAR = "L0_TRADE_CALENDAR";
     private static final String CODE_ROW_COUNT = "L2_ROW_COUNT_DEVIATION";
     private static final String CODE_ADJ_ALIGN = "L2_ADJ_FACTOR_ALIGN";
     private static final String CODE_CLOSE_SANITY = "L2_CLOSE_SANITY";
@@ -96,14 +97,22 @@ public class DataQualityGate {
 
         long dailyCount = qualityQueryMapper.countDailyByDate(date);
         String isOpen = queryTradeCalIsOpen(date);
-        boolean nonTradingDay = "0".equals(isOpen) || (isOpen == null && dailyCount == 0);
+        boolean nonTradingDay = "0".equals(isOpen);
 
         List<QualityCheckItem> items;
         String result;
-        if (nonTradingDay) {
+        if (isOpen == null || (!"1".equals(isOpen) && !nonTradingDay)) {
+            items = List.of(new QualityCheckItem(CODE_CALENDAR, 0,
+                    "第⓪层 · 交易日历可用性", QualityCheckItem.FAIL,
+                    "trade_cal 当日记录为 1（开市）或 0（休市）",
+                    isOpen == null ? "无当日日历记录" : "is_open=" + isOpen,
+                    "无法证明当日为非交易日；禁止把『空库/日历缺失』误报为 EMPTY，请先回填 trade_cal"));
+            result = QualityReport.RESULT_FAIL;
+            log.warn("S0 质量门: tradeDate={} 交易日历缺失或非法 → FAIL（不能推断为非交易日）", date);
+        } else if (nonTradingDay) {
             items = skipItems(date, isOpen);
             result = QualityReport.RESULT_EMPTY;
-            log.info("S0 质量门: tradeDate={} 非交易日/无数据 → EMPTY（逐项 SKIP，不算失败）", date);
+            log.info("S0 质量门: tradeDate={} 非交易日 → EMPTY（逐项 SKIP，不算失败）", date);
         } else {
             items = new ArrayList<>();
             items.addAll(checkCriticalJobs(date, checkTime));

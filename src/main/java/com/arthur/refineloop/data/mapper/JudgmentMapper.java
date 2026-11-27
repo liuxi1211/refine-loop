@@ -30,9 +30,9 @@ import java.time.LocalDateTime;
 public interface JudgmentMapper {
 
     /** 插入一条已冻结的判断（{@code frozen=1, superseded=0}）。 */
-    @Insert("INSERT INTO judgment (judgment_id, trade_date, ts_code, pipeline_id, report_id, method_version, "
+    @Insert("INSERT INTO judgment (judgment_id, trade_date, ts_code, pipeline_id, run_id, report_id, method_version, "
             + "direction, horizon_days, expire_at, confidence, payload, frozen, superseded, invalidated_at, created_at) "
-            + "VALUES (#{judgmentId}, #{tradeDate}, #{tsCode}, #{pipelineId}, #{reportId}, #{methodVersion}, "
+            + "VALUES (#{judgmentId}, #{tradeDate}, #{tsCode}, #{pipelineId}, #{runId}, #{reportId}, #{methodVersion}, "
             + "#{direction}, #{horizonDays}, #{expireAt}, #{confidence}, #{payload}, #{frozen}, #{superseded}, "
             + "#{invalidatedAt}, #{createdAt})")
     @Options(useGeneratedKeys = true, keyProperty = "id")

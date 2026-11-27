@@ -39,6 +39,7 @@ import com.arthur.refineloop.data.mapper.SwIndustryMemberMapper;
 import com.arthur.refineloop.data.mapper.TushareLookupMapper;
 import com.arthur.refineloop.data.mapper.UnitFactMapper;
 import com.arthur.refineloop.judgment.BenchmarkResolver;
+import com.arthur.refineloop.judgment.JudgmentArchiveContextResolver;
 import com.arthur.refineloop.judgment.JudgmentArchiveService;
 import com.arthur.refineloop.judgment.JudgmentIdGenerator;
 import com.arthur.refineloop.judgment.JudgmentPayloadAssembler;
@@ -48,6 +49,7 @@ import com.arthur.refineloop.judgment.model.JudgmentArchiveResult;
 import com.arthur.refineloop.judgment.model.JudgmentInput;
 import com.arthur.refineloop.judgment.model.MethodSnapshot;
 import com.arthur.refineloop.support.SchemaTestSupport;
+import com.arthur.refineloop.support.TradingDays;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -123,7 +125,8 @@ class T11ClosureChainIntegrationTest {
         executor = Executors.newVirtualThreadPerTaskExecutor();
         computeUnit = new CalcValuationPercentileUnit(
                 mapper(DailyBasicMapper.class), mapper(SwIndustryMemberMapper.class));
-        factStore = new FactStore(mapper(UnitFactMapper.class), CLOCK);
+        factStore = new FactStore(mapper(UnitFactMapper.class),
+                new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource())), CLOCK);
         probeUnit = new ValuationProbeInterpretUnit(
                 llmInvoker(), new PromptTemplateLoader(), validationChain(), calendar());
         archiveService = archiveService();
@@ -141,14 +144,14 @@ class T11ClosureChainIntegrationTest {
                 new FactContext(TRADE_DATE, RUN_ID),
                 StockPool.of("T11", List.of(LOW_CODE, MID_CODE, HIGH_CODE)));
         assertThat(batch.size()).isEqualTo(3);
-        assertThat(factStore.saveAll(TRADE_DATE, batch.facts())).isEqualTo(3);
+        assertThat(factStore.saveAll(RUN_ID, TRADE_DATE, batch.facts())).isEqualTo(3);
         assertThat(countRows("unit_fact")).isEqualTo(3);
 
         FactResult top = lowestPercentile(batch.facts());
         assertThat(top.tsCode()).as("最低分位的标的应排在首位").isEqualTo(LOW_CODE);
 
         FactBundle bundle = FactBundle.builder(top.tsCode(), TRADE_DATE, RUN_ID)
-                .putAll(factStore.findByTradeDateAndTsCode(TRADE_DATE, top.tsCode()))
+                .putAll(factStore.findByTradeDateAndTsCode(RUN_ID, TRADE_DATE, top.tsCode()))
                 .seal();
         chatClient.enqueue(validOutput(top));
 
@@ -178,7 +181,7 @@ class T11ClosureChainIntegrationTest {
     void rerunSupersedesAndKeepsOldPayloadFrozen() throws Exception {
         FactResult fact = computeUnit.computeBatch(new FactContext(TRADE_DATE, RUN_ID),
                 StockPool.of("T11", List.of(LOW_CODE))).facts().get(0);
-        factStore.saveAll(TRADE_DATE, List.of(fact));
+        factStore.saveAll(RUN_ID, TRADE_DATE, List.of(fact));
         chatClient.enqueue(validOutput(fact));
         InterpretResult interpreted = probeUnit.interpret(bundleOf(fact));
         long reportId = writeReport(fact.tsCode(), interpreted.reportMd(), "READY", "P1_REPORT");
@@ -204,7 +207,7 @@ class T11ClosureChainIntegrationTest {
     void degradesAndArchivesWhenOutputHasBareNumbers() throws Exception {
         FactResult fact = computeUnit.computeBatch(new FactContext(TRADE_DATE, RUN_ID),
                 StockPool.of("T11", List.of(HIGH_CODE))).facts().get(0);
-        factStore.saveAll(TRADE_DATE, List.of(fact));
+        factStore.saveAll(RUN_ID, TRADE_DATE, List.of(fact));
 
         // 正文里「分位约 88.5%」没有包裹溯源标记 → ReportNumberScanner 判失败；连续三次都脏 → 降级
         String dirty = dirtyOutput(fact);
@@ -219,7 +222,7 @@ class T11ClosureChainIntegrationTest {
 
         long reportId = writeReport(fact.tsCode(), "", "DEGRADED", "JUDGMENT_DEGRADED");
         JudgmentArchiveResult archived = archiveService.archive(
-                new JudgmentArchiveRequest(fact.tsCode(), TRADE_DATE, "P1", reportId, null,
+                new JudgmentArchiveRequest(fact.tsCode(), TRADE_DATE, "P1", RUN_ID, reportId, null,
                         methodSnapshot(fact, degraded), new JudgmentInput(
                                 degraded.judgmentBlock(), true, degraded.dataGaps())));
 
@@ -243,6 +246,9 @@ class T11ClosureChainIntegrationTest {
         for (String code : codes) {
             ValuationFixtures.stock(jdbc, code, "标的" + code.substring(0, 6));
             ValuationFixtures.industryMember(jdbc, code, INDUSTRY, "20200101", null);
+            jdbc.update("INSERT INTO daily (ts_code, trade_date, close) VALUES (?, ?, 12.4)", code, TRADE_DATE);
+            jdbc.update("INSERT INTO adj_factor (ts_code, trade_date, adj_factor) VALUES (?, ?, 1.25)",
+                    code, TRADE_DATE);
         }
         List<String> dates = ValuationFixtures.datesEndingAt(TRADE_DATE, 500);
         List<String> history = dates.subList(0, 499);
@@ -254,6 +260,8 @@ class T11ClosureChainIntegrationTest {
         ValuationFixtures.dailyBasic(jdbc, LOW_CODE, TRADE_DATE, "10.02", "1.5", "1.1", "4.8", "1000000");
         ValuationFixtures.dailyBasic(jdbc, MID_CODE, TRADE_DATE, "15", "1.5", "1.1", "4.8", "1000000");
         ValuationFixtures.dailyBasic(jdbc, HIGH_CODE, TRADE_DATE, "19.9", "1.5", "1.1", "4.8", "1000000");
+        jdbc.update("INSERT INTO index_daily (ts_code, trade_date, close) VALUES ('000300.SH', ?, 3500)",
+                TRADE_DATE);
     }
 
     private FactResult lowestPercentile(List<FactResult> facts) {
@@ -268,7 +276,7 @@ class T11ClosureChainIntegrationTest {
 
     private FactBundle bundleOf(FactResult fact) {
         return FactBundle.builder(fact.tsCode(), TRADE_DATE, RUN_ID)
-                .putAll(factStore.findByTradeDateAndTsCode(TRADE_DATE, fact.tsCode()))
+                .putAll(factStore.findByTradeDateAndTsCode(RUN_ID, TRADE_DATE, fact.tsCode()))
                 .seal();
     }
 
@@ -307,9 +315,10 @@ class T11ClosureChainIntegrationTest {
         return new JudgmentArchiveService(
                 mapper(JudgmentMapper.class),
                 mapper(JudgmentUnitRefMapper.class),
-                mapper(TushareLookupMapper.class),
+                new JudgmentArchiveContextResolver(mapper(TushareLookupMapper.class),
+                        mapper(UnitFactMapper.class)),
                 new JudgmentIdGenerator(),
-                new JudgmentPayloadAssembler(),
+                new JudgmentPayloadAssembler((tradeDate, tradingDays) -> TradingDays.after(tradeDate, tradingDays)),
                 new BenchmarkResolver(mapper(SwIndustryMemberMapper.class), new JudgmentProperties()),
                 JudgmentReferenceChecker.none(),
                 new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource())),
@@ -318,7 +327,7 @@ class T11ClosureChainIntegrationTest {
 
     private JudgmentArchiveRequest archiveRequest(FactResult fact, InterpretResult interpreted,
                                                   long reportId, String reportRef) {
-        return new JudgmentArchiveRequest(fact.tsCode(), TRADE_DATE, "P1", reportId, reportRef,
+        return new JudgmentArchiveRequest(fact.tsCode(), TRADE_DATE, "P1", RUN_ID, reportId, reportRef,
                 methodSnapshot(fact, interpreted),
                 new JudgmentInput(interpreted.judgmentBlock(), interpreted.degraded(), interpreted.dataGaps()));
     }
@@ -452,7 +461,7 @@ class T11ClosureChainIntegrationTest {
 
             String factPath = metric.substring("valuation.".length());
             FactResult fact = mapper(UnitFactMapper.class)
-                    .selectByTradeDateAndTsCode(TRADE_DATE, archived.payload().get("stock_code").toString())
+                    .selectByTradeDateAndTsCode(RUN_ID, TRADE_DATE, archived.payload().get("stock_code").toString())
                     .stream()
                     .filter(row -> ValuationFactSchema.UNIT_ID.equals(row.getUnitId()))
                     .map(row -> new FactResult(row.getTsCode(), row.getUnitId(), row.getUnitVersion(),

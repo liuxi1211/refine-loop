@@ -79,6 +79,13 @@ public final class TushareSqlProvider {
         return "DELETE FROM " + table + " WHERE " + String.join(" AND ", conditions);
     }
 
+    /** 按业务日期区间删除整块（月窗口回补上游返回空时，也必须清除旧块）。 */
+    public static String deleteByRange(Map<String, Object> params) {
+        return "DELETE FROM " + identifier(str(params, "table"))
+                + " WHERE " + identifier(str(params, "column"))
+                + " >= #{start} AND " + identifier(str(params, "column")) + " <= #{end}";
+    }
+
     // ================================================================ 读
 
     public static String countAll(Map<String, Object> params) {

@@ -158,6 +158,29 @@ class CalcValuationPercentileUnitTest {
     }
 
     @Test
+    @DisplayName("历史回放：未来才生效的行业成分不得提前用于同业基线")
+    void ignoresIndustryMembershipThatStartsAfterTradeDate() {
+        ValuationFixtures.stock(jdbc, CODE, "平安银行");
+        ValuationFixtures.stock(jdbc, "600000.SH", "未来成分");
+        // 当日查询只应看见 CODE 的旧行业，不能看见 600000.SH 在下个月才生效的新行业
+        ValuationFixtures.industryMember(jdbc, CODE, INDUSTRY, "20200101", null);
+        ValuationFixtures.industryMember(jdbc, "600000.SH", INDUSTRY, "20261226", null);
+        List<String> dates = ValuationFixtures.datesEndingAt(TRADE_DATE, 500);
+        ValuationFixtures.series(jdbc, CODE, dates.subList(0, 499), ValuationFixtures.linearPe("10", "0.02"),
+                "1.5", "1.1", "4.8", "1000000");
+        ValuationFixtures.dailyBasic(jdbc, CODE, TRADE_DATE, "15", "1.5", "1.1", "4.8", "1000000");
+        ValuationFixtures.dailyBasic(jdbc, "600000.SH", TRADE_DATE, "30", "1.5", "1.1", "4.8", "2000000");
+
+        FactResult fact = single(compute(CODE));
+
+        // 基线里只有 CODE 自己：行业中位数等于自身 PE，未来成分被排除
+        assertThat(metricValue(fact, ValuationFactSchema.INDUSTRY_PE_MEDIAN)).isEqualByComparingTo("15.00");
+        assertThat(metricValue(fact, ValuationFactSchema.VS_INDUSTRY)).isEqualByComparingTo("0");
+        assertThat(SchemaTestSupport.mapper(jdbc, SwIndustryMemberMapper.class)
+                .selectL1Code("600000.SH", TRADE_DATE)).as("未来行业归属必须为空").isNull();
+    }
+
+    @Test
     @DisplayName("分页：页大小 2、池 5 只时不重不漏且不跨页串数据")
     void pagesDoNotMixStocks() {
         unit = newUnit(2);

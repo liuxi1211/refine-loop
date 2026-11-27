@@ -1,17 +1,18 @@
 package com.arthur.refineloop.judgment;
 
 import com.arthur.refineloop.common.ApiException;
+import com.arthur.refineloop.common.util.DateTimes;
 import com.arthur.refineloop.common.util.Strings;
 import com.arthur.refineloop.judgment.model.AssembledJudgment;
 import com.arthur.refineloop.judgment.model.Benchmark;
 import com.arthur.refineloop.judgment.model.JudgmentArchiveRequest;
 import com.arthur.refineloop.judgment.model.JudgmentBlock;
+import com.arthur.refineloop.judgment.model.MarketSnapshot;
 import com.arthur.refineloop.judgment.model.MethodSnapshot;
 
-import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -37,9 +38,11 @@ import java.util.regex.Pattern;
  *
  * <p><b>不变量</b>：
  * <ul>
- *   <li>payload 顶层不出现 null 值（{@link Map#copyOf} 会抛 NPE，且前端契约要求必填字段非空）；</li>
- *   <li>{@code direction.expire_at} 是自然日 {@code yyyy-MM-dd}，不早于 trade_date；</li>
- *   <li>判断块自报的 {@code unit_id@unit_version} 必须出现在本次 {@code method.units} 中（否则溯源断链）。</li>
+ *   <li>payload 顶层不出现 null 值（前端契约要求必填字段非空；空集合用 {@code []}）；</li>
+ *   <li>{@code direction.expire_at} 是自然日格式 {@code yyyy-MM-dd}，但语义是「第 N 个<b>交易日</b>」，
+ *       且只能由交易日历计算（判断块自报值必须与之相等）；</li>
+ *   <li>判断块自报的 {@code unit_id@unit_version} 必须出现在本次 {@code method.units} 中（否则溯源断链）；</li>
+ *   <li>收益口径在存档时冻结进 {@code evaluation}，事后不得用别的起点回算。</li>
  * </ul>
  */
 public class JudgmentPayloadAssembler {
@@ -50,17 +53,23 @@ public class JudgmentPayloadAssembler {
     /** 降级判断的固定文案（委托给 {@link JudgmentBlock}，保证降级文案只有一个事实源）。 */
     public static final String DEGRADED_THESIS = JudgmentBlock.DEGRADED_THESIS;
 
-    private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter ISO_OFFSET = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
     private static final Pattern TS_CODE = Pattern.compile("^\\d{6}\\.(SH|SZ|BJ)$");
     private static final Pattern TRADE_DATE = Pattern.compile("^\\d{8}$");
     private static final int MAX_METHOD_VERSION_LENGTH = 20;
 
-    /** 组装上下文：编号、重申标记、基准、名称与生成时间。 */
+    private final JudgmentExpiryRule expiryRule;
+
+    public JudgmentPayloadAssembler(JudgmentExpiryRule expiryRule) {
+        this.expiryRule = expiryRule;
+    }
+
+    /** 组装上下文：编号、重申标记、基准、名称、行情起点与生成时间。 */
     public record AssemblyContext(String judgmentId,
                                   boolean reaffirm,
                                   Benchmark benchmark,
                                   String stockName,
+                                  MarketSnapshot marketSnapshot,
                                   OffsetDateTime createdAt) {
 
         public AssemblyContext {
@@ -69,6 +78,9 @@ public class JudgmentPayloadAssembler {
             }
             if (benchmark == null) {
                 throw new IllegalArgumentException("benchmark 不能为空（存档时必须固化基准）");
+            }
+            if (marketSnapshot == null) {
+                throw new IllegalArgumentException("marketSnapshot 不能为空（没有起点无法验证超额收益）");
             }
             if (createdAt == null) {
                 throw new IllegalArgumentException("createdAt 不能为空（禁止在组装器内取 now）");
@@ -106,11 +118,17 @@ public class JudgmentPayloadAssembler {
      * @return 组装结果（payload + 冗余列投影）
      */
     public AssembledJudgment assemble(JudgmentArchiveRequest request, AssemblyContext context) {
-        DirectionPlan plan = planDirection(request);
+        return assemble(request, context, planDirection(request));
+    }
+
+    /** 使用调用方已计算的方向计划组装，避免同一存档请求重复查询交易日历。 */
+    public AssembledJudgment assemble(JudgmentArchiveRequest request, AssemblyContext context,
+                                      DirectionPlan plan) {
         JudgmentBlock block = JudgmentBlock.parse(request.judgment().judgmentBlock(),
                 request.judgment().degraded());
 
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("schema_version", "2.0");
         payload.put("judgment_id", context.judgmentId());
         payload.put("stock_code", request.tsCode());
         payload.put("stock_name", context.stockName());
@@ -118,14 +136,18 @@ public class JudgmentPayloadAssembler {
         payload.put("created_at", context.createdAt().truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
                 .format(ISO_OFFSET));
         payload.put("trade_date", request.tradeDate());
-        payload.put("benchmark", benchmarkBlock(context.benchmark()));
+        payload.put("dimension", textOrComposite(request, "dimension"));
+        payload.put("conclusion", textOrComposite(request, "conclusion"));
+        payload.put("facts_used", request.judgment().judgmentBlock().getOrDefault("facts_used", List.of()));
+        payload.put("benchmark", benchmarkBlock(context.benchmark(), request.tradeDate()));
+        payload.put("evaluation", evaluationBlock(context.marketSnapshot()));
         payload.put("report_ref", request.reportRef() == null ? "" : request.reportRef().trim());
         payload.put("degraded", request.judgment().degraded());
         payload.put("method", methodBlock(request.method()));
         payload.put("direction", directionBlock(block.direction(), plan, context.reaffirm()));
         payload.put("key_levels", keyLevelsBlock(block.keyLevels()));
         payload.put("thesis", thesisBlock(block, plan.confidence()));
-        payload.put("verification_rules", verificationRulesBlock(block.verificationRules()));
+        payload.put("verification_rules", verificationRulesBlock(block.verificationRules(), plan));
         payload.put("data_gaps", mergeGaps(request.judgment().dataGaps(), block.dataGaps()));
         return new AssembledJudgment(context.judgmentId(), plan.direction(), plan.horizonDays(),
                 plan.expireAt(), plan.confidence(), payload);
@@ -145,6 +167,9 @@ public class JudgmentPayloadAssembler {
         }
         if (request.pipelineId() == null || request.pipelineId().isBlank()) {
             throw invalid("pipelineId 不能为空");
+        }
+        if (request.runId() == null || request.runId().isBlank()) {
+            throw invalid("runId 不能为空：判断、事实与报告必须按同一次运行隔离");
         }
         if (request.reportId() <= 0) {
             throw invalid("reportId 必须为正数（降级判断也要有 DEGRADED 占位报告）：" + request.reportId());
@@ -205,10 +230,30 @@ public class JudgmentPayloadAssembler {
         return block;
     }
 
-    private Map<String, Object> benchmarkBlock(Benchmark benchmark) {
+    private String textOrComposite(JudgmentArchiveRequest request, String key) {
+        Object value = request.judgment().judgmentBlock().get(key);
+        return value == null ? "composite" : String.valueOf(value);
+    }
+
+    private Map<String, Object> benchmarkBlock(Benchmark benchmark, String tradeDate) {
         Map<String, Object> block = new LinkedHashMap<>();
         block.put("index_code", benchmark.indexCode());
         block.put("industry_code", benchmark.industryCode() == null ? "" : benchmark.industryCode());
+        block.put("industry_index_code", benchmark.industryCode() == null ? "" : benchmark.industryCode());
+        block.put("membership_as_of", tradeDate);
+        block.put("return_method", "stock:adj_close,benchmark:close");
+        return block;
+    }
+
+    private Map<String, Object> evaluationBlock(MarketSnapshot snapshot) {
+        Map<String, Object> block = new LinkedHashMap<>();
+        block.put("entry_rule", "T_CLOSE");
+        block.put("stock_ref_close", snapshot.stockClose());
+        block.put("stock_ref_adj_factor", snapshot.stockAdjFactor());
+        block.put("benchmark_ref_close", snapshot.benchmarkClose());
+        block.put("min_excess_pct", BigDecimal.ZERO);
+        block.put("neutral_scored", false);
+        block.put("degraded_scored", false);
         return block;
     }
 
@@ -220,29 +265,23 @@ public class JudgmentPayloadAssembler {
         block.put("type", plan.direction());
         block.put("scale", DIRECTION_SCALE);
         block.put("horizon_days", plan.horizonDays());
+        block.put("horizon_unit", "trading_days");
         block.put("expire_at", plan.expireAt());
         block.put("is_reaffirm", reaffirm);
         block.put("target_note", direction.targetNote() == null ? "" : direction.targetNote());
         return block;
     }
 
-    /** 到期日：优先用判断块给的（校验不早于交易日），否则按有效期的自然日推算（详案 3.2 示例口径）。 */
+    /** 到期日只由交易日历计算；判断块自报值只允许与计算结果一致，不能自由改写窗口。 */
     private String resolveExpireAt(String tradeDate, JudgmentBlock.Direction direction) {
-        LocalDate trade = LocalDate.parse(tradeDate, DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String computedCompact = expiryRule.plusTradingDays(tradeDate, direction.horizonDays());
+        String computed = DateTimes.formatDate(DateTimes.parseCompactDate(computedCompact));
         String declared = direction.declaredExpireAt();
-        if (declared == null) {
-            return trade.plusDays(direction.horizonDays()).format(ISO_DATE);
+        if (declared != null && !declared.equals(computed)) {
+            throw invalid("direction.expire_at 与有效期不一致：按 " + direction.horizonDays()
+                    + " 个交易日计算应为 " + computed + "，判断块写 " + declared);
         }
-        LocalDate expire;
-        try {
-            expire = LocalDate.parse(declared, ISO_DATE);
-        } catch (DateTimeParseException e) {
-            throw invalid("direction.expire_at 必须为 yyyy-MM-dd（当前 " + declared + "）");
-        }
-        if (expire.isBefore(trade)) {
-            throw invalid("direction.expire_at 不能早于交易日：" + declared + " < " + tradeDate);
-        }
-        return expire.format(ISO_DATE);
+        return computed;
     }
 
     private Map<String, Object> keyLevelsBlock(JudgmentBlock.KeyLevels keyLevels) {
@@ -268,16 +307,32 @@ public class JudgmentPayloadAssembler {
         return thesis;
     }
 
-    private List<Map<String, Object>> verificationRulesBlock(List<JudgmentBlock.VerificationRule> rules) {
+    private List<Map<String, Object>> verificationRulesBlock(List<JudgmentBlock.VerificationRule> rules,
+                                                             DirectionPlan plan) {
         List<Map<String, Object>> normalized = new ArrayList<>(rules.size());
-        for (JudgmentBlock.VerificationRule rule : rules) {
+        for (int i = 0; i < rules.size(); i++) {
+            JudgmentBlock.VerificationRule rule = rules.get(i);
             Map<String, Object> item = new LinkedHashMap<>();
+            item.put("rule_id", rule.ruleId() == null ? "R" + (i + 1) : rule.ruleId());
             item.put("rule_type", rule.ruleType());
             if (rule.target() != null) {
                 item.put("target", rule.target());
             }
-            item.put("params", rule.params());
-            item.put("on_hit", rule.onHit());
+            Map<String, Object> params = new LinkedHashMap<>(rule.params());
+            if ("direction_fail".equals(rule.ruleType())) {
+                params.put("expire_at", plan.expireAt());
+                params.put("benchmark", "index");
+                params.put("min_excess_pct", BigDecimal.ZERO);
+            } else if ("price_touch".equals(rule.ruleType()) || "price_break".equals(rule.ruleType())) {
+                params.putIfAbsent("price_field", "support".equals(rule.target()) ? "low" : "high");
+                params.putIfAbsent("from", "next_trading_day");
+                if ("stop_loss".equals(rule.target())) {
+                    params.put("price_field", "close");
+                }
+            }
+            item.put("params", params);
+            item.put("on_hit", "to_verify");
+            item.put("expected", "review");
             normalized.add(item);
         }
         return normalized;

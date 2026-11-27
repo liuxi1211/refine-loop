@@ -141,7 +141,12 @@ public class FactsUsageValidator implements JudgmentValidator {
             return difference.compareTo(BigDecimal.ZERO) == 0;
         }
         BigDecimal relative = difference.divide(actual.abs(), MathContext.DECIMAL64);
-        return relative.compareTo(MAX_RELATIVE_ERROR) <= 0;
+        if (relative.compareTo(MAX_RELATIVE_ERROR) <= 0) {
+            return true;
+        }
+        // 允许按模型书写精度做最后一位四舍五入：18.5432 → 18.5 合法，18.5432 → 18.9 仍失败
+        BigDecimal roundingTolerance = BigDecimal.valueOf(0.5).movePointLeft(declared.scale());
+        return difference.compareTo(roundingTolerance) <= 0;
     }
 
     private static String asText(Object raw) {

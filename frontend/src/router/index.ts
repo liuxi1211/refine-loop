@@ -26,18 +26,20 @@ const routes: RouteRecordRaw[] = [
     component: LoginView,
     meta: { title: '登录', public: true, layout: 'blank' }
   },
-  { path: '/', redirect: '/overview' },
+  { path: '/', redirect: '/data/overview' },
   {
-    path: '/overview',
+    path: '/data/overview',
+    alias: '/overview',
     name: 'overview',
     component: DataOverview,
     meta: { title: '数据总览' }
   },
   {
-    path: '/jobs',
+    path: '/data/jobs',
+    alias: '/jobs',
     name: 'jobs',
     component: IngestJobs,
-    meta: { title: '接入作业' }
+    meta: { title: '接入与回填' }
   },
   {
     path: '/profile',
@@ -51,7 +53,7 @@ const routes: RouteRecordRaw[] = [
     component: UserManagementView,
     meta: { title: '用户管理', permission: 'user:read' }
   },
-  { path: '/:pathMatch(.*)*', redirect: '/overview' }
+  { path: '/:pathMatch(.*)*', redirect: '/data/overview' }
 ]
 
 /** hash 模式：纯静态部署到 Nginx 无需 history 回退配置（与《前端设计详案》§7 一致） */
@@ -69,7 +71,7 @@ router.beforeEach(async (to) => {
 
   if (to.meta.public) {
     if (to.name === 'login' && auth.isAuthenticated) {
-      return { path: '/overview' }
+      return { path: '/data/overview' }
     }
     return true
   }
@@ -95,7 +97,7 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to) => {
   const title = typeof to.meta.title === 'string' ? to.meta.title : ''
-  document.title = title ? `${title} · RefineLoop 数据中心` : 'RefineLoop 数据中心'
+  document.title = title ? `${title} · RefineLoop 投研工作台` : 'RefineLoop 投研工作台'
 })
 
 export default router

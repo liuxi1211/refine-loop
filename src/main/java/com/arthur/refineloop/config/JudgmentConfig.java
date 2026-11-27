@@ -4,8 +4,11 @@ import com.arthur.refineloop.data.mapper.JudgmentMapper;
 import com.arthur.refineloop.data.mapper.JudgmentUnitRefMapper;
 import com.arthur.refineloop.data.mapper.SwIndustryMemberMapper;
 import com.arthur.refineloop.data.mapper.TushareLookupMapper;
+import com.arthur.refineloop.data.mapper.UnitFactMapper;
 import com.arthur.refineloop.judgment.BenchmarkResolver;
+import com.arthur.refineloop.judgment.JudgmentArchiveContextResolver;
 import com.arthur.refineloop.judgment.JudgmentArchiveService;
+import com.arthur.refineloop.judgment.JudgmentExpiryCalculator;
 import com.arthur.refineloop.judgment.JudgmentIdGenerator;
 import com.arthur.refineloop.judgment.JudgmentPayloadAssembler;
 import com.arthur.refineloop.judgment.JudgmentReferenceChecker;
@@ -34,8 +37,8 @@ public class JudgmentConfig {
     }
 
     @Bean
-    public JudgmentPayloadAssembler judgmentPayloadAssembler() {
-        return new JudgmentPayloadAssembler();
+    public JudgmentPayloadAssembler judgmentPayloadAssembler(TushareLookupMapper lookupMapper) {
+        return new JudgmentPayloadAssembler(new JudgmentExpiryCalculator(lookupMapper));
     }
 
     @Bean
@@ -54,13 +57,15 @@ public class JudgmentConfig {
     public JudgmentArchiveService judgmentArchiveService(JudgmentMapper judgmentMapper,
                                                          JudgmentUnitRefMapper unitRefMapper,
                                                          TushareLookupMapper lookupMapper,
+                                                          UnitFactMapper unitFactMapper,
                                                          JudgmentIdGenerator judgmentIdGenerator,
                                                          JudgmentPayloadAssembler assembler,
                                                          BenchmarkResolver benchmarkResolver,
                                                          JudgmentReferenceChecker referenceChecker,
                                                          TransactionTemplate transactionTemplate,
                                                          Clock clock) {
-        return new JudgmentArchiveService(judgmentMapper, unitRefMapper, lookupMapper,
+        return new JudgmentArchiveService(judgmentMapper, unitRefMapper,
+                new JudgmentArchiveContextResolver(lookupMapper, unitFactMapper),
                 judgmentIdGenerator, assembler, benchmarkResolver, referenceChecker,
                 transactionTemplate, clock);
     }

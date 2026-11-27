@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -140,8 +141,8 @@ class AbstractInterpretUnitTest {
     }
 
     @Test
-    @DisplayName("交易日历不可用时有效期按自然日近似，并在 data_gaps 留痕")
-    void fallsBackToNaturalDaysWhenCalendarUnavailable() {
+    @DisplayName("交易日历不可用时阻断，不能生成不可验证的降级判断")
+    void rejectsDegradedJudgmentWhenCalendarUnavailable() {
         calendar = (tradeDate, tradingDays) -> {
             throw ApiException.dataNotReady("交易日历不足");
         };
@@ -149,12 +150,9 @@ class AbstractInterpretUnitTest {
                 List.of(new ValidationError("schema", "$.confidence", "enum", "枚举越界")));
         when(invoker.invoke(any())).thenReturn(callResult(validOutput()));
 
-        InterpretResult result = newUnit().interpret(ReferenceFacts.bundle());
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> direction = (Map<String, Object>) result.judgmentBlock().get("direction");
-        assertThat(direction).containsEntry("expire_at", "2026-12-03");
-        assertThat(result.dataGaps()).anySatisfy(gap -> assertThat(gap).contains("自然日近似"));
+        assertThatThrownBy(() -> newUnit().interpret(ReferenceFacts.bundle()))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("交易日历不足");
     }
 
     @Test

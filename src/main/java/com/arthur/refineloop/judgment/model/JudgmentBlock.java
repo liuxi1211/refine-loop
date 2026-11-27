@@ -8,8 +8,10 @@ import com.arthur.refineloop.judgment.JudgmentErrorCode;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 判断块的结构化视图：把 interpret 单元产出的 {@code Map} 一次性解析成强类型，顺带完成「块级」校验。
@@ -71,13 +73,19 @@ public record JudgmentBlock(
      */
     public static JudgmentBlock parse(Map<String, Object> raw, boolean degraded) {
         Map<String, Object> block = raw == null ? Map.of() : raw;
+        Direction direction = Direction.parse(block.get("direction"));
+        Thesis thesis = Thesis.parse(block.get("thesis"), degraded);
+        requireConsistentSide(direction.type(), thesis.currentSide());
+        KeyLevels keyLevels = KeyLevels.parse(block.get("key_levels"), degraded);
+        List<VerificationRule> verificationRules = parseRules(block.get("verification_rules"));
+        validatePriceRules(keyLevels, verificationRules);
         return new JudgmentBlock(
                 Identity.parse(block),
-                Direction.parse(block.get("direction")),
+                direction,
                 parseConfidence(block.get("confidence"), degraded),
-                KeyLevels.parse(block.get("key_levels")),
-                Thesis.parse(block.get("thesis"), degraded),
-                parseRules(block.get("verification_rules")),
+                keyLevels,
+                thesis,
+                verificationRules,
                 strings(block.get("logic_tags"), "$.logic_tags"),
                 strings(block.get("data_gaps"), "$.data_gaps"));
     }
@@ -116,9 +124,12 @@ public record JudgmentBlock(
     public record KeyLevels(List<BigDecimal> support, List<BigDecimal> resistance,
                             BigDecimal stopLoss, String invalidationCondition) {
 
-        static KeyLevels parse(Object raw) {
+        static KeyLevels parse(Object raw, boolean degraded) {
             if (raw == null) {
-                return new KeyLevels(List.of(), List.of(), null, null);
+                if (degraded) {
+                    return new KeyLevels(List.of(), List.of(), null, null);
+                }
+                throw invalid("$.key_levels 不能为空：正常判断必须声明关键价位与失效条件");
             }
             Map<String, Object> levels = requireMap(raw, "$.key_levels");
             return new KeyLevels(numbers(levels.get("support"), "$.key_levels.support"),
@@ -131,13 +142,22 @@ public record JudgmentBlock(
     public record Thesis(String bullCore, String bearCore, String currentSide, String confidence) {
 
         static Thesis parse(Object raw, boolean degraded) {
+            if (raw == null && !degraded) {
+                throw invalid("$.thesis 不能为空：正常判断必须同时给出看多、看空与当前占优方向");
+            }
             Map<String, Object> thesis = raw == null ? Map.of() : requireMap(raw, "$.thesis");
             String fallback = degraded ? DEGRADED_THESIS : "未提供";
             String side = text(thesis.get("current_side"));
             if (side == null) {
+                if (!degraded) {
+                    throw invalid("$.thesis.current_side 不能为空");
+                }
                 side = "neutral";
             } else if (!CURRENT_SIDES.contains(side)) {
                 throw invalid("thesis.current_side 必须为 " + String.join("/", CURRENT_SIDES) + "（当前 " + side + "）");
+            }
+            if (!degraded && (text(thesis.get("bull_core")) == null || text(thesis.get("bear_core")) == null)) {
+                throw invalid("$.thesis.bull_core 与 bear_core 均不能为空：主判断必须同时保留正反论证");
             }
             String declaredConfidence = text(thesis.get("confidence"));
             String confidence = declaredConfidence == null
@@ -150,7 +170,8 @@ public record JudgmentBlock(
     }
 
     /** 单条验证规则：{@code rule_type} 限四类，{@code on_hit} 缺省 {@code to_verify}。 */
-    public record VerificationRule(String ruleType, String target, Map<String, Object> params, String onHit) {
+    public record VerificationRule(String ruleId, String ruleType, String target,
+                                   Map<String, Object> params, String onHit) {
 
         public VerificationRule {
             params = params == null ? Map.of() : Map.copyOf(params);
@@ -168,7 +189,12 @@ public record JudgmentBlock(
                     ? copyOf(map)
                     : Map.of();
             String onHit = text(rule.get("on_hit"));
-            return new VerificationRule(ruleType, text(rule.get("target")), params,
+            if (onHit != null && !"to_verify".equals(onHit)) {
+                throw invalid(path + ".on_hit 当前仅支持 to_verify（M3 再扩展 hit/miss/review）");
+            }
+            String declaredRuleId = text(rule.get("rule_id"));
+            return new VerificationRule(declaredRuleId == null ? "R" + (index + 1) : declaredRuleId,
+                    ruleType, text(rule.get("target")), params,
                     onHit == null ? "to_verify" : onHit);
         }
     }
@@ -180,10 +206,48 @@ public record JudgmentBlock(
             throw invalid("verification_rules 至少 1 条：判断必须可被流水线3 巡检（3.3 契约 1）");
         }
         List<VerificationRule> parsed = new ArrayList<>(rules.size());
+        Set<String> ruleIds = new LinkedHashSet<>();
         for (int i = 0; i < rules.size(); i++) {
-            parsed.add(VerificationRule.parse(rules.get(i), i));
+            VerificationRule rule = VerificationRule.parse(rules.get(i), i);
+            if (!ruleIds.add(rule.ruleId())) {
+                throw invalid("$.verification_rules[" + i + "].rule_id 重复：" + rule.ruleId());
+            }
+            if ("logic_invalid".equals(rule.ruleType()) && !hasValues(rule.params(), "watch_tags")
+                    && !hasValues(rule.params(), "event_types")) {
+                throw invalid("$.verification_rules[" + i + "] logic_invalid 至少需要 watch_tags 或 event_types");
+            }
+            parsed.add(rule);
         }
         return parsed;
+    }
+
+    private static void validatePriceRules(KeyLevels levels, List<VerificationRule> rules) {
+        for (int i = 0; i < rules.size(); i++) {
+            VerificationRule rule = rules.get(i);
+            if (!"price_touch".equals(rule.ruleType()) && !"price_break".equals(rule.ruleType())) {
+                continue;
+            }
+            List<BigDecimal> candidates = switch (rule.target() == null ? "" : rule.target()) {
+                case "support" -> levels.support();
+                case "resistance" -> levels.resistance();
+                case "stop_loss" -> levels.stopLoss() == null ? List.of() : List.of(levels.stopLoss());
+                default -> List.of();
+            };
+            BigDecimal level = number(rule.params().get("level"));
+            if (level == null || candidates.isEmpty()
+                    || candidates.stream().noneMatch(candidate -> withinPriceTolerance(candidate, level))) {
+                throw invalid("$.verification_rules[" + i + "].params.level 必须与 key_levels."
+                        + rule.target() + " 中的某个价位一致（允许偏差 ≤0.5%）");
+            }
+            if ("stop_loss".equals(rule.target()) && !"price_break".equals(rule.ruleType())) {
+                throw invalid("$.verification_rules[" + i + "] stop_loss 只允许 price_break（收盘确认）");
+            }
+        }
+    }
+
+    private static boolean withinPriceTolerance(BigDecimal expected, BigDecimal declared) {
+        BigDecimal tolerance = expected.abs().multiply(new BigDecimal("0.005"));
+        return expected.subtract(declared).abs().compareTo(tolerance) <= 0;
     }
 
     private static String parseConfidence(Object raw, boolean degraded) {
@@ -205,6 +269,19 @@ public record JudgmentBlock(
         }
     }
 
+    private static void requireConsistentSide(String direction, String side) {
+        String expected = switch (direction) {
+            case "bullish" -> "bull";
+            case "bearish" -> "bear";
+            case "neutral", "conditional" -> "neutral";
+            default -> throw invalid("$.direction.type 取值非法：" + direction);
+        };
+        if (!expected.equals(side)) {
+            throw invalid("$.thesis.current_side 与 direction.type 不一致：" + direction + " 应对应 " + expected
+                    + "，当前 " + side);
+        }
+    }
+
     private static String requireDirectionType(Object raw) {
         String code = text(raw);
         if (code == null) {
@@ -222,7 +299,12 @@ public record JudgmentBlock(
         if (value == null) {
             throw invalid("direction.horizon_days 必须是数字（当前 " + raw + "）");
         }
-        int days = value.intValue();
+        int days;
+        try {
+            days = value.intValueExact();
+        } catch (ArithmeticException e) {
+            throw invalid("direction.horizon_days 必须为整数交易日（当前 " + raw + "）");
+        }
         if (days < 1 || days > MAX_HORIZON_DAYS) {
             throw invalid("direction.horizon_days 必须为 1~" + MAX_HORIZON_DAYS + "（当前 " + days + "）");
         }
@@ -275,6 +357,10 @@ public record JudgmentBlock(
             }
         }
         return result;
+    }
+
+    private static boolean hasValues(Map<String, Object> params, String key) {
+        return params.get(key) instanceof List<?> values && !values.isEmpty();
     }
 
     private static BigDecimal number(Object raw) {

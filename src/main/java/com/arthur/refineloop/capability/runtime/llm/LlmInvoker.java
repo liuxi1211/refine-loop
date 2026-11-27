@@ -132,8 +132,17 @@ public class LlmInvoker {
         BigDecimal cost = LlmUsageStore.estimateCost(promptTokens, completionTokens,
                 profile.getInputPricePer1m(), profile.getOutputPricePer1m());
         String runId = resolveRunId(spec);
-        long usageId = usageStore.record(runId, spec.unitId(), spec.profile(), model,
-                promptTokens, completionTokens, totalTokens, cost);
+        long usageId;
+        try {
+            usageId = usageStore.record(runId, spec.unitId(), spec.profile(), model,
+                    promptTokens, completionTokens, totalTokens, cost);
+        } catch (RuntimeException e) {
+            // 已付费且成功的模型调用不能因本地记账失败而重试；错误日志用于后续对账
+            log.error("[llm] 用量记账失败 profile={} unit={} runId={} model={} tokens={}/{}/{} cost={}；"
+                    + "保留已成功的模型结果，请人工对账", spec.profile(), spec.unitId(), runId, model,
+                    promptTokens, completionTokens, totalTokens, cost, e);
+            usageId = 0L;
+        }
         long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
         log.info("[llm] 调用成功 profile={} unit={} runId={} model={} tokens={}/{}/{} attempts={} "
                         + "durationMs={} cost={} usageId={}",

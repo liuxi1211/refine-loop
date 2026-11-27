@@ -18,7 +18,6 @@ import com.arthur.refineloop.common.util.Strings;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.ClassUtils;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -56,9 +55,6 @@ public abstract class AbstractInterpretUnit implements InterpretUnit {
 
     /** 首次调用时回喂变量的占位值（提示词里说明「无」表示首次输出）。 */
     static final String NO_FEEDBACK = "无";
-
-    /** 降级时用自然日近似有效期的天数（交易日历不可用时的兜底）。 */
-    private static final int FALLBACK_EXPIRE_DAYS = 7;
 
     private static final String VAR_FACTS = "facts_json";
     private static final String VAR_FEEDBACK = "validation_feedback";
@@ -193,32 +189,22 @@ public abstract class AbstractInterpretUnit implements InterpretUnit {
     }
 
     /**
-     * 生成机械降级判断：有效期按 5 个交易日计算，日历不可用时退回自然日近似并注明。
+     * 生成机械降级判断：有效期按 5 个交易日计算；日历不足则阻断（不能生成不可验证的降级判断）。
      */
     private InterpretResult degrade(FactBundle facts, UnitMetadata unit, String reason) {
         List<String> reasons = new ArrayList<>(2);
         reasons.add(reason);
-        String expireAt = expireDate(facts, reasons);
+        String expireAt = expireDate(facts);
         log.warn("[interpret] 降级 unit={} stock={} expireAt={} reason={}",
                 unit.unitId(), facts.tsCode(), expireAt, reason);
         return InterpretResult.degraded(new DegradedJudgment(
                 unit.unitId(), unit.version(), facts.tsCode(), facts.tradeDate(), expireAt, reasons));
     }
 
-    private String expireDate(FactBundle facts, List<String> reasons) {
-        String tradeDate = facts.tradeDate();
-        try {
-            String expireCompact = tradingDayCalendar.plusTradingDays(
-                    tradeDate, InterpretResult.DEGRADED_HORIZON_TRADING_DAYS);
-            return DateTimes.formatDate(DateTimes.parseCompactDate(expireCompact));
-        } catch (ApiException e) {
-            LocalDate fallback = DateTimes.parseCompactDate(tradeDate).plusDays(FALLBACK_EXPIRE_DAYS);
-            String formatted = DateTimes.formatDate(fallback);
-            reasons.add("交易日历不可用，降级判断有效期按自然日近似（" + formatted + "）：" + e.getMessage());
-            log.warn("[interpret] 交易日历不可用，降级有效期按自然日近似 tradeDate={} expireAt={}",
-                    tradeDate, formatted);
-            return formatted;
-        }
+    private String expireDate(FactBundle facts) {
+        String expireCompact = tradingDayCalendar.plusTradingDays(
+                facts.tradeDate(), InterpretResult.DEGRADED_HORIZON_TRADING_DAYS);
+        return DateTimes.formatDate(DateTimes.parseCompactDate(expireCompact));
     }
 
     // ================================================================ 元数据自洽校验

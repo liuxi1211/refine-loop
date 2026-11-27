@@ -107,6 +107,27 @@ public class IngestLogService implements IngestLogQueryService {
         mapper.updateById(patch);
     }
 
+    /**
+     * 应用启动时把上次进程遗留的 RUNNING/PENDING 作业标为 FAILED。
+     *
+     * <p>异步队列不持久化，进程退出后不可能自行续跑；保留 RUNNING 会让质量门永久失败且前端无法重试。
+     * 这里只改状态/结束时间/错误摘要，保留已经拉取与写入的行数供人工判断部分完成范围。
+     *
+     * @return 恢复的作业行数
+     */
+    public int recoverInterruptedJobs() {
+        List<IngestLogEntity> activeJobs = mapper.selectActiveJobs();
+        for (IngestLogEntity job : activeJobs) {
+            IngestLogEntity patch = new IngestLogEntity();
+            patch.setId(job.getId());
+            patch.setStatus("FAILED");
+            patch.setEndTime(LocalDateTime.now(clock));
+            patch.setErrorMsg(abbreviate("服务重启，作业中断；已写入部分数据，请核对后重试"));
+            mapper.updateById(patch);
+        }
+        return activeJobs.size();
+    }
+
     private static long requireId(IngestLogEntity entity) {
         if (entity.getId() == null) {
             throw new IllegalStateException("ingest_log 插入未返回主键");

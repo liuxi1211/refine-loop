@@ -55,13 +55,16 @@ class UnitVersionStoreTest {
     }
 
     @Test
-    @DisplayName("interpret 单元登记 prompts/{id}/{version}.md")
-    void syncInterpretUnitWritesPromptPath() {
+    @DisplayName("interpret 单元补丁版本仍登记主版本 prompt，重复同步不清空人工 params")
+    void syncInterpretUnitWritesPromptPathAndKeepsParams() {
         UnitRegistry.Entry entry = registry.register(new DemoInterpretUnit());
+        store.sync(entry);
+        jdbc.update("UPDATE unit_version SET params = '{\"manual\":true}' WHERE unit_id='demo_interpret'");
         store.sync(entry);
 
         var saved = store.find("demo_interpret", "v1.0");
-        assertThat(saved.getPromptPath()).isEqualTo("prompts/demo_interpret/v1.0.md");
+        assertThat(saved.getPromptPath()).isEqualTo("prompts/demo_interpret/v1.md");
+        assertThat(saved.getParams()).isEqualTo("{\"manual\":true}");
     }
 
     @CapabilityUnit(id = "demo_interpret", version = "v1.0", type = UnitType.INTERPRET)

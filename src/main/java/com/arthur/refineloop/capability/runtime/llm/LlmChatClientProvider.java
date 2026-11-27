@@ -11,6 +11,7 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.web.client.RestClient;
 
 import java.net.http.HttpClient;
@@ -100,6 +101,8 @@ public class LlmChatClientProvider implements ChatClientProvider {
         OpenAiChatModel model = OpenAiChatModel.builder()
                 .openAiApi(api)
                 .defaultOptions(options)
+                // 重试只允许 LlmInvoker 这一层控制；Spring AI 默认模板会叠加重试并击穿外层硬超时
+                .retryTemplate(new RetryTemplate())
                 .build();
         return ChatClient.builder(model).build();
     }
@@ -122,6 +125,7 @@ public class LlmChatClientProvider implements ChatClientProvider {
         AnthropicChatModel model = AnthropicChatModel.builder()
                 .anthropicApi(api)
                 .defaultOptions(options)
+                .retryTemplate(new RetryTemplate())
                 .build();
         return ChatClient.builder(model).build();
     }

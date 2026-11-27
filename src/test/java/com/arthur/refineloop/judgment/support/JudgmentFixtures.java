@@ -123,7 +123,7 @@ public final class JudgmentFixtures {
     public static JudgmentArchiveRequest request(String tradeDate, String tsCode, Map<String, Object> block,
                                                  boolean degraded, List<String> gaps,
                                                  MethodSnapshot method, long reportId) {
-        return new JudgmentArchiveRequest(tsCode, tradeDate, PIPELINE, reportId,
+        return new JudgmentArchiveRequest(tsCode, tradeDate, PIPELINE, "RUN-" + tradeDate, reportId,
                 "reports/" + tradeDate + "/" + tsCode + ".md", method,
                 new JudgmentInput(block, degraded, gaps));
     }

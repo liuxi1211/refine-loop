@@ -125,6 +125,17 @@ class ReportNumberScannerTest {
     }
 
     @Test
+    @DisplayName("证券代码、指数名称、财报季度与技术指标周期属于标识，不是裸事实数字")
+    void ignoresSecurityCodesAndMarketTerms() {
+        String report = """
+                ## 结论
+                000001.SZ 与 801780.SI；沪深300、上证50、2025Q3、H1、T+1、MA20、近3年、5日均线。
+                """;
+
+        assertThat(scanner.validate(context(report))).isEmpty();
+    }
+
+    @Test
     @DisplayName("空报告直接通过（正文缺失由 Schema/样本回放兜）")
     void emptyReportPasses() {
         assertThat(scanner.validate(context(""))).isEmpty();

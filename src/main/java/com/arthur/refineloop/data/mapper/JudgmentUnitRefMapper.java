@@ -18,11 +18,12 @@ import java.util.List;
 @Mapper
 public interface JudgmentUnitRefMapper {
 
-    @Insert("INSERT INTO judgment_unit_ref (judgment_id, unit_id, unit_version, output_summary, created_at) "
-            + "VALUES (#{judgmentId}, #{unitId}, #{unitVersion}, #{outputSummary}, #{createdAt})")
+    @Insert("INSERT INTO judgment_unit_ref (judgment_id, unit_id, unit_version, fact_id, output_summary, created_at) "
+            + "VALUES (#{judgmentId}, #{unitId}, #{unitVersion}, #{factId}, #{outputSummary}, #{createdAt})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(JudgmentUnitRefEntity entity);
 
-    @Select("SELECT * FROM judgment_unit_ref WHERE judgment_id = #{judgmentId} ORDER BY unit_id")
+    @Select("SELECT id, judgment_id, unit_id, unit_version, fact_id, output_summary, created_at "
+            + "FROM judgment_unit_ref WHERE judgment_id = #{judgmentId} ORDER BY unit_id")
     List<JudgmentUnitRefEntity> selectByJudgmentId(@Param("judgmentId") String judgmentId);
 }

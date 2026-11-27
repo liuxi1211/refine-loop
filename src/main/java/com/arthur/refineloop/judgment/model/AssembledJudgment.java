@@ -1,5 +1,7 @@
 package com.arthur.refineloop.judgment.model;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -24,6 +26,7 @@ public record AssembledJudgment(String judgmentId,
                                 Map<String, Object> payload) {
 
     public AssembledJudgment {
-        payload = payload == null ? Map.of() : Map.copyOf(payload);
+        payload = payload == null ? Map.of()
+                : Collections.unmodifiableMap(new LinkedHashMap<>(payload));
     }
 }

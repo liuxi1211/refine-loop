@@ -1,6 +1,8 @@
 package com.arthur.refineloop.capability.runtime;
 
 import com.arthur.refineloop.capability.spi.CapabilityUnit;
+import com.arthur.refineloop.capability.spi.ComputeUnit;
+import com.arthur.refineloop.capability.spi.InterpretUnit;
 import com.arthur.refineloop.capability.spi.UnitScope;
 import com.arthur.refineloop.capability.spi.UnitType;
 import com.arthur.refineloop.common.ApiException;
@@ -48,7 +50,7 @@ public class UnitRegistry {
             throw ApiException.of(CapabilityErrorCode.INVALID_UNIT,
                     "缺少 @CapabilityUnit 注解：" + unitClass.getName());
         }
-        validate(unitClass, meta);
+        validate(unitClass, meta, unit);
 
         Entry entry = new Entry(meta.id(), meta.version(), meta.type(), meta.scope(), meta.modelProfile(), unit);
         Entry previous = entries.putIfAbsent(meta.id(), entry);
@@ -61,7 +63,8 @@ public class UnitRegistry {
         return entry;
     }
 
-    private void validate(Class<?> unitClass, com.arthur.refineloop.capability.spi.annotation.CapabilityUnit meta) {
+    private void validate(Class<?> unitClass, com.arthur.refineloop.capability.spi.annotation.CapabilityUnit meta,
+                          CapabilityUnit unit) {
         if (!UNIT_ID.matcher(meta.id()).matches()) {
             throw ApiException.of(CapabilityErrorCode.INVALID_UNIT,
                     "unitId 非法（需小写字母开头、仅小写/数字/下划线、3-40 位）：" + meta.id());
@@ -73,6 +76,15 @@ public class UnitRegistry {
         if (meta.type() == UnitType.INTERPRET && meta.scope() != UnitScope.PER_STOCK) {
             throw ApiException.of(CapabilityErrorCode.INVALID_UNIT,
                     "INTERPRET 单元必须为 PER_STOCK：" + meta.id());
+        }
+        if (meta.type() == UnitType.COMPUTE && !(unit instanceof ComputeUnit)) {
+            throw ApiException.of(CapabilityErrorCode.INVALID_UNIT,
+                    "COMPUTE 类型必须实现 ComputeUnit：" + unitClass.getName());
+        }
+        if (meta.type() == UnitType.INTERPRET
+                && !(unit instanceof InterpretUnit)) {
+            throw ApiException.of(CapabilityErrorCode.INVALID_UNIT,
+                    "INTERPRET 类型必须实现 InterpretUnit：" + unitClass.getName());
         }
         if (meta.modelProfile() == null || meta.modelProfile().isBlank()) {
             throw ApiException.of(CapabilityErrorCode.INVALID_UNIT,

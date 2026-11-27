@@ -22,6 +22,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -52,6 +54,8 @@ public class IngestFacadeImpl implements IngestFacade {
     private final Clock clock;
 
     private final AtomicInteger seq = new AtomicInteger();
+    /** 已入队但尚未结束的表：既用于重复提交 409，也用于与每日编排互斥。 */
+    private final Set<String> inFlightTables = ConcurrentHashMap.newKeySet();
     private final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "ingest-single-table");
         t.setDaemon(true);
@@ -71,6 +75,10 @@ public class IngestFacadeImpl implements IngestFacade {
 
     @Override
     public IngestTriggerAck triggerDaily() {
+        if (!inFlightTables.isEmpty()) {
+            throw ApiException.conflict("单表作业仍在运行（" + String.join(",", inFlightTables)
+                    + "），请等待结束后再触发每日编排，避免同表并发写");
+        }
         Optional<String> runId = orchestrator.triggerDailyAsync();
         if (runId.isEmpty()) {
             return new IngestTriggerAck(false, null, "已有编排正在运行，请等待结束或查看当前进度");
@@ -154,15 +162,26 @@ public class IngestFacadeImpl implements IngestFacade {
     }
 
     private IngestTriggerAck submit(TableDef def, String jobType, String start, String end, String message) {
+        String table = def.tableName();
+        if (!inFlightTables.add(table)) {
+            throw ApiException.conflict("该表已有单表作业在队列中或运行中：" + table + "，请勿重复提交");
+        }
         String runId = "M" + LocalDateTime.now(clock).format(ID_FMT) + "-"
                 + Integer.toHexString(seq.incrementAndGet() & 0xFFFF);
-        executor.execute(() -> {
-            try {
-                jobService.runJob(def, jobType, start, end, runId);
-            } catch (Exception e) {
-                log.error("单表作业执行异常 table={} jobType={} runId={}", def.tableName(), jobType, runId, e);
-            }
-        });
+        try {
+            executor.execute(() -> {
+                try {
+                    jobService.runJob(def, jobType, start, end, runId);
+                } catch (Exception e) {
+                    log.error("单表作业执行异常 table={} jobType={} runId={}", table, jobType, runId, e);
+                } finally {
+                    inFlightTables.remove(table);
+                }
+            });
+        } catch (RuntimeException e) {
+            inFlightTables.remove(table);
+            throw e;
+        }
         return new IngestTriggerAck(true, runId, message);
     }
 

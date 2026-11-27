@@ -407,4 +407,62 @@ class IngestJobServiceTest {
         assertThat(enabled).doesNotContain("hk_hold");
         assertThat(enabled).hasSize(40);
     }
+
+    @Test
+    void perStock部分失败时作业必须FAILED不能伪装成功() {
+        props.setJobRetryCount(0);
+        seedStockBasic("000001.SZ", "000002.SZ");
+        String fields = "ts_code,ann_date,end_date,roe,roa,grossprofit_margin,netprofit_margin,"
+                + "dt_netprofit_yoy,or_yoy,debt_to_assets,dt_eps_yoy";
+        server.expect(requestTo(URL))
+                .andExpect(content().string(containsString("\"ts_code\":\"000001.SZ\"")))
+                .andRespond(withSuccess(TushareMockResponses.ok(fields, TushareMockResponses.rows(
+                        new Object[]{"000001.SZ", "20260430", "20260331", 12.5, 5.1, 30.2, 10.1, 8.8, 7.7, 45.0, 6.6})), JSON));
+        server.expect(requestTo(URL))
+                .andExpect(content().string(containsString("\"ts_code\":\"000002.SZ\"")))
+                .andRespond(withSuccess(TushareMockResponses.error(50101, "单股参数错误"), JSON));
+
+        IngestJobResult result = jobService.runJob(def("fina_indicator"), IngestJobService.JOB_INCR,
+                "20200101", "20261231", "RUN-PARTIAL");
+
+        assertThat(result.status()).isEqualTo("FAILED");
+        assertThat(result.errorMessage()).contains("50101");
+        assertThat(latestLog("fina_indicator").get("status")).isEqualTo("FAILED");
+        server.verify();
+    }
+
+    @Test
+    void 按日整块回补上游清空时必须删除旧块() {
+        seedTradeCal("20260105");
+        jdbc.update("INSERT INTO top_list (trade_date, ts_code, name, reason)"
+                + " VALUES ('20260105', '000001.SZ', '旧数据', '旧原因')");
+        String fields = "trade_date,ts_code,name,close,pct_change,turnover_rate,amount,l_sell,l_buy,l_amount,"
+                + "net_amount,net_rate,amount_rate,float_values,reason";
+        server.expect(requestTo(URL))
+                .andRespond(withSuccess(TushareMockResponses.ok(fields, List.of()), JSON));
+
+        IngestJobResult result = jobService.runJob(def("top_list"), IngestJobService.JOB_INCR,
+                "20260105", "20260105", "RUN-EMPTY-DAY");
+
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(count("top_list")).as("上游空结果应清掉旧块").isZero();
+        server.verify();
+    }
+
+    @Test
+    void 按月整块回补上游清空时必须删除旧块() {
+        jdbc.update("INSERT INTO repurchase (ts_code, ann_date, end_date, proc, exp_date, vol, amount,"
+                + " high_limit, low_limit)"
+                + " VALUES ('000001.SZ', '20260110', '20251231', '完成', '20260109', 100.0, 1000.0, 12.0, 8.0)");
+        String fields = "ts_code,ann_date,end_date,proc,exp_date,vol,amount,high_limit,low_limit";
+        server.expect(requestTo(URL))
+                .andRespond(withSuccess(TushareMockResponses.ok(fields, List.of()), JSON));
+
+        IngestJobResult result = jobService.runJob(def("repurchase"), IngestJobService.JOB_FULL,
+                "20260101", "20260131", "RUN-EMPTY-MONTH");
+
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(count("repurchase")).as("上游空月应清掉旧公告块").isZero();
+        server.verify();
+    }
 }

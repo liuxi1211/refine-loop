@@ -92,13 +92,14 @@ CREATE TABLE IF NOT EXISTS judgment (
   ts_code        VARCHAR(12)  NOT NULL,               -- 标的代码
   trade_date     CHAR(8)      NOT NULL,               -- 交易日 yyyyMMdd
   pipeline_id    VARCHAR(8)   NOT NULL,               -- 流水线编号
+  run_id         VARCHAR(40)  NOT NULL,               -- 产出该判断的 pipeline_run.run_id
   report_id      BIGINT       NOT NULL,               -- 引用 report.id（应用层校验）
   method_version VARCHAR(20)  NOT NULL,               -- 方法版本
-  direction      VARCHAR(12)  NOT NULL,               -- 枚举 BULLISH/BEARISH/NEUTRAL，见 DictEnum#direction
+  direction      VARCHAR(16)  NOT NULL,               -- 枚举小写码：bullish/bearish/neutral/conditional，见 DictEnum#judgmentDirection
   horizon_days   INT          NOT NULL,               -- 验证窗口（交易日）
-  expire_at      CHAR(8)      NOT NULL,               -- 失效日 yyyyMMdd（新表用 CHAR(8)，不用 DATE）
-  confidence     DECIMAL(5,4) NOT NULL,               -- 置信度 0~1，4 位小数
-  payload        TEXT         NOT NULL,               -- JSON 文本（完整判断 Schema）
+  expire_at      DATE         NOT NULL,               -- 到期日 yyyy-MM-dd（由 trade_cal 按交易日推算；E6 存量例外）
+  confidence     VARCHAR(4)   NOT NULL,               -- 置信度中文单字：高/中/低
+  payload        TEXT         NOT NULL,               -- JSON 文本（完整判断 Schema 2.0）
   frozen         TINYINT      NOT NULL DEFAULT 1,     -- 0/1 存档即冻结
   superseded     TINYINT      NOT NULL DEFAULT 0,     -- 0/1 被新版本替代
   active_flag    TINYINT GENERATED ALWAYS AS (CASE WHEN superseded = 0 THEN 1 ELSE NULL END) STORED,
@@ -117,7 +118,10 @@ CREATE INDEX IF NOT EXISTS idx_judgment_expire ON judgment (expire_at, frozen);
 2. 每列必须有对齐的类型列，**类型不许写成"看着像"的东西**（`string`、`number`、`varchar` 不带长度）；
 3. 每个枚举/日期/金额/数量/引用列都要有行内注释（值域或单位或目标）；
 4. 唯一键 = 业务幂等键；**能防重的表不许只有普通索引**；
-5. 局部唯一（"同组只有一行有效"）用「生成列 + NULL 逃逸」，不用应用层判断（`uk_judgment_active` 是标准写法）。
+5. 局部唯一（"同组只有一行有效"）用「生成列 + NULL 逃逸」，不用应用层判断（`uk_judgment_active` 是标准写法）；
+6. **事实/证据表按运行隔离**：由某次运行产出、且被其它不可变资产（判断、报告）引用的事实，幂等键必须包含
+   `run_id` 并**只追加不覆盖**（`unit_fact` 是标准写法）。"事实可重算所以可以覆盖"与"判断冻结不可改"是矛盾的
+   ——覆盖之后旧判断的溯源就断了。
 
 ---
 

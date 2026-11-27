@@ -153,6 +153,46 @@ public class IngestTableWriter {
         });
     }
 
+    /** 上游返回空块时按相等键清除旧块；键必须属于本表且非空，防止误删整表。 */
+    public void deleteBlock(TableDef def, Map<String, Object> keyValues) {
+        List<String> columns = requireRegistered(def);
+        if (keyValues == null || keyValues.isEmpty()) {
+            throw new IllegalArgumentException("deleteBlock 的 keyValues 不能为空: " + def.tableName());
+        }
+        List<String> keys = new ArrayList<>(keyValues.size());
+        keyValues.forEach((key, value) -> {
+            if (key == null || !columns.contains(key) || isBlank(value)) {
+                throw new IllegalArgumentException("deleteBlock 键非法或值为空: " + def.tableName() + "." + key);
+            }
+            keys.add(key);
+        });
+        Map<String, Object> normalized = new java.util.LinkedHashMap<>();
+        keyValues.forEach((key, value) -> normalized.put(key, normalize(value)));
+        String table = def.tableName();
+        withWriteLock(() -> {
+            batchExecutor.executeInTransaction(TushareTableMapper.class,
+                    mapper -> mapper.deleteByKeys(table, keys, normalized));
+            return null;
+        });
+    }
+
+    /** 按业务日期区间清除整块；用于月窗口回补返回空结果的场景。 */
+    public void deleteByDateRange(TableDef def, String column, String start, String end) {
+        List<String> columns = requireRegistered(def);
+        if (column == null || !columns.contains(column)) {
+            throw new IllegalArgumentException("deleteByDateRange 日期列非法: " + def.tableName() + "." + column);
+        }
+        if (isBlank(start) || isBlank(end)) {
+            throw new IllegalArgumentException("deleteByDateRange 起止日期不能为空: " + def.tableName());
+        }
+        String table = def.tableName();
+        withWriteLock(() -> {
+            batchExecutor.executeInTransaction(TushareTableMapper.class,
+                    mapper -> mapper.deleteByRange(table, column, start, end));
+            return null;
+        });
+    }
+
     // ------------------------------------------------------------------ 校验
 
     private List<Map<String, Object>> validateRows(TableDef def, List<Map<String, Object>> rows,

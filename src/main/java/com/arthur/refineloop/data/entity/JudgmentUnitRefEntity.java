@@ -30,6 +30,9 @@ public class JudgmentUnitRefEntity {
     /** 单元版本（如 {@code v1.0}）。 */
     private String unitVersion;
 
+    /** compute 单元对应的 {@code unit_fact.id}；interpret 单元无事实行时为 null。 */
+    private Long factId;
+
     /** 单元判断块 JSON（{@code facts_used} 溯源弹层的数据源）。 */
     private String outputSummary;
 

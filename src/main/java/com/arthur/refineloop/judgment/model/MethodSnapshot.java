@@ -1,5 +1,7 @@
 package com.arthur.refineloop.judgment.model;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +32,8 @@ public record MethodSnapshot(String methodVersion, String school, List<UnitRef> 
     public record UnitRef(String unitId, String unitVersion, Map<String, Object> outputSummary) {
 
         public UnitRef {
-            outputSummary = outputSummary == null ? Map.of() : Map.copyOf(outputSummary);
+            outputSummary = outputSummary == null ? Map.of()
+                    : Collections.unmodifiableMap(new LinkedHashMap<>(outputSummary));
         }
     }
 }

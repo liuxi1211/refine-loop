@@ -34,6 +34,10 @@ public interface IngestLogMapper extends BaseMapper<IngestLogEntity> {
     @Select("SELECT * FROM ingest_log WHERE run_id = #{runId} ORDER BY id ASC")
     List<IngestLogEntity> selectByRunId(@Param("runId") String runId);
 
-    @Select("SELECT run_id FROM ingest_log ORDER BY id DESC LIMIT 1")
+    /** 启动恢复：找出上次进程遗留的非终态作业（本系统当前只创建 RUNNING，PENDING 为兼容预留）。 */
+    @Select("SELECT * FROM ingest_log WHERE status IN ('RUNNING', 'PENDING') ORDER BY id ASC")
+    List<IngestLogEntity> selectActiveJobs();
+
+    @Select("SELECT run_id FROM ingest_log WHERE run_id LIKE 'R%' ORDER BY id DESC LIMIT 1")
     String selectLatestRunId();
 }
